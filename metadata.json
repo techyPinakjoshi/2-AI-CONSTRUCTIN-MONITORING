@@ -1,0 +1,8 @@
+{
+  "name": "ConstructAI Monitor",
+  "description": "Next-gen AI construction monitoring dashboard featuring drone survey integration, 3D BIM visualization, excavation tracking, and automated inventory auditing.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ]
+}
