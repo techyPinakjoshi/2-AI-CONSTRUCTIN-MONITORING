@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { 
   ProjectStage, 
@@ -6,15 +7,21 @@ import {
   LayerVisibility,
   LayerMetadata,
   DataSourceType,
-  CameraFeed
+  CameraFeed,
+  ViewMode,
+  TourSession,
+  TaskLog,
+  AiLogEntry
 } from './types';
-import { INITIAL_INVENTORY, STAGES, MOCK_CAMERAS } from './constants';
+import { INITIAL_INVENTORY, STAGES, MOCK_CAMERAS, INITIAL_TOUR_SESSIONS, MOCK_TASK_LOGS } from './constants';
 import ThreeDViewer from './components/ThreeDViewer';
 import Sidebar from './components/Sidebar';
 import InventoryPanel from './components/InventoryPanel';
 import ProgressPanel from './components/ProgressPanel';
-import { LayoutDashboard, Package, Activity, Settings, UserCircle, Menu, X, ClipboardList } from 'lucide-react';
-import { analyzeSiteProgress, getRegulatoryAdvice } from './services/geminiService';
+import TourPlaybackModal from './components/TourPlaybackModal';
+import MultiCameraModal from './components/MultiCameraModal';
+import { LayoutDashboard, Package, Activity, Settings, UserCircle, Menu, X, ClipboardList, Clock, Zap } from 'lucide-react';
+import { analyzeSiteProgress, getRegulatoryAdvice, generateProgressReportFromCamera, generateHourlyLog, generateDailySummary } from './services/geminiService';
 
 const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'dashboard' | 'inventory' | 'progress'>('dashboard');
@@ -26,6 +33,14 @@ const App: React.FC = () => {
   // Camera & Master View State
   const [cameras, setCameras] = useState<CameraFeed[]>(MOCK_CAMERAS);
   const [selectedCameraId, setSelectedCameraId] = useState<string | null>(null);
+  
+  // NEW: View Mode State (Orbit, Split, Tour)
+  const [viewMode, setViewMode] = useState<ViewMode>('ORBIT');
+  
+  // NEW: Saved Tours State
+  const [savedTours, setSavedTours] = useState<TourSession[]>(INITIAL_TOUR_SESSIONS);
+  const [playbackSession, setPlaybackSession] = useState<TourSession | null>(null);
+  const [isMultiCameraModalOpen, setIsMultiCameraModalOpen] = useState(false);
 
   // Measurements State
   const [measurements, setMeasurements] = useState<SiteMeasurement[]>([
@@ -34,6 +49,14 @@ const App: React.FC = () => {
     { label: 'Max Depth', value: '8.4', unit: 'm', delta: '+0.5m' },
     { label: 'Soil Density', value: '1.85', unit: 'g/cc' },
   ]);
+
+  // Task Logs State (Project Progress & BOQ)
+  const [taskLogs, setTaskLogs] = useState<TaskLog[]>(MOCK_TASK_LOGS);
+  
+  // NEW: AI Reports State
+  const [aiLogs, setAiLogs] = useState<AiLogEntry[]>([]);
+  const [dailySummary, setDailySummary] = useState<string | null>(null);
+  const [simulatedHour, setSimulatedHour] = useState(8); // Start at 8 AM
 
   // Layer Visibility State (Global Master State)
   const [layers, setLayers] = useState<LayerVisibility>({
@@ -45,6 +68,7 @@ const App: React.FC = () => {
     excavationRed: true,
     excavationGreen: true,
     excavationBlue: true, // Live progress
+    bimSlice: false, // Slicing view disabled by default
   });
 
   // Layer Metadata (Source & Connection) State
@@ -57,6 +81,7 @@ const App: React.FC = () => {
     excavationRed: { id: 'excavationRed', hasData: true, source: 'ConAI' }, // Mock: Plan already connected
     excavationGreen: { id: 'excavationGreen', hasData: true, source: 'MANUAL' },
     excavationBlue: { id: 'excavationBlue', hasData: true, source: 'MANUAL' },
+    bimSlice: { id: 'bimSlice', hasData: true, source: 'BIM' }, // Feature always available for demo
   });
 
   const toggleLayer = (key: keyof LayerVisibility) => {
@@ -70,6 +95,84 @@ const App: React.FC = () => {
     }));
     // Auto-enable visibility when data is added
     setLayers(prev => ({ ...prev, [key]: true }));
+  };
+  
+  const handleSaveTour = (session: TourSession) => {
+      setSavedTours(prev => [session, ...prev]);
+      alert("Walkthrough Session Saved Successfully!");
+  };
+
+  const handleDeleteTour = (id: string) => {
+      setSavedTours(prev => prev.filter(t => t.id !== id));
+  };
+
+  const handleAddCamera = async (url: string) => {
+    if (!url) return;
+    
+    // 1. Add Camera Logic
+    let type: 'YOUTUBE' | 'DIRECT' = 'DIRECT';
+    let processedUrl = url;
+
+    // Robust Parsing for YouTube ID
+    // Matches: youtu.be/ID, youtube.com/watch?v=ID, youtube.com/embed/ID, youtube.com/live/ID
+    const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=|live\/)([^#&?]*).*/;
+    const match = url.match(regExp);
+
+    if (match && match[2].length > 0) {
+        type = 'YOUTUBE';
+        const videoId = match[2];
+        const isLive = url.includes('/live/');
+        
+        let params = `autoplay=1&mute=1&controls=0&origin=${window.location.origin}&rel=0`;
+        if (!isLive) {
+            params += `&loop=1&playlist=${videoId}`;
+        }
+
+        processedUrl = `https://www.youtube.com/embed/${videoId}?${params}`;
+    }
+
+    const newCam: CameraFeed = {
+        id: `CAM-${Date.now()}`,
+        name: `New Feed ${cameras.length + 1}`,
+        type: 'FIXED',
+        status: 'RECORDING',
+        location: 'User Added Stream',
+        lastSync: 'Live',
+        activeZones: ['General'],
+        streamUrl: processedUrl,
+        streamType: type
+    };
+
+    setCameras(prev => [...prev, newCam]);
+    
+    // 2. Trigger AI Analysis
+    console.log("Analyzing camera feed with AI...");
+    
+    try {
+        const aiResult = await generateProgressReportFromCamera(newCam.name, currentStage);
+        
+        if (aiResult) {
+            if (aiResult.newTaskLog) {
+                setTaskLogs(prev => [aiResult.newTaskLog as TaskLog, ...prev]);
+            }
+            
+            if (aiResult.newMeasurement) {
+                setMeasurements(prev => {
+                     const exists = prev.find(m => m.label === aiResult.newMeasurement.label);
+                     if (exists) {
+                         return prev.map(m => m.label === aiResult.newMeasurement.label ? aiResult.newMeasurement : m);
+                     } else {
+                         return [...prev, aiResult.newMeasurement];
+                     }
+                });
+            }
+
+            alert(`AI Connected & Analysis Complete!\n\n${aiResult.analysisSummary}\n\nBOQ updated with IS Code standards.`);
+        }
+    } catch (e) {
+        console.error("AI Analysis failed", e);
+        alert("Camera connected, but AI Analysis failed. Please try again.");
+    }
   };
 
   const handleRunDroneSurvey = async () => {
@@ -103,13 +206,43 @@ const App: React.FC = () => {
       const ans = await getRegulatoryAdvice(regulatoryQuery);
       setRegulatoryAnswer(ans);
   };
+  
+  // SIMULATION: Manually trigger an hourly report (to demonstrate the feature)
+  const handleSimulateHourlyReport = async () => {
+      const cam = cameras[0]; // Use first camera
+      const report = await generateHourlyLog(cam.name, simulatedHour);
+      const timeString = `${simulatedHour > 12 ? simulatedHour - 12 : simulatedHour}:00 ${simulatedHour >= 12 ? 'PM' : 'AM'}`;
+      
+      const newLog: AiLogEntry = {
+          id: `LOG-${Date.now()}`,
+          timestamp: timeString,
+          cameraName: cam.name,
+          // Fixed property access: changed .description to .desc and .objects to .objs
+          description: report.desc,
+          detectedObjects: report.objs
+      };
+      
+      setAiLogs(prev => [newLog, ...prev]);
+      setSimulatedHour(prev => (prev + 1) > 23 ? 0 : prev + 1); // Increment hour
+      
+      // If we have enough logs, generate daily summary
+      if (aiLogs.length > 3) {
+           const summary = await generateDailySummary(aiLogs);
+           setDailySummary(summary.summary);
+      }
+      
+      // If user isn't on progress tab, show a small hint (optional)
+      if (activeTab !== 'progress') {
+          // Toast could go here
+      }
+  };
 
   const activeCamera = selectedCameraId 
     ? cameras.find(c => c.id === selectedCameraId) || null 
     : null;
 
   return (
-    <div className="flex h-screen w-full overflow-hidden bg-slate-950 text-slate-200 font-sans selection:bg-cyan-500/30">
+    <div className="flex h-screen w-full overflow-hidden bg-slate-900 text-slate-200 font-sans selection:bg-cyan-500/30">
       
       {/* Side Navigation (Main App Nav) */}
       <nav className="w-16 md:w-20 flex-shrink-0 flex flex-col items-center py-6 bg-slate-900 border-r border-slate-800 z-50">
@@ -151,7 +284,7 @@ const App: React.FC = () => {
       </nav>
 
       {/* Main Content Area */}
-      <div className="flex-1 flex flex-col min-w-0">
+      <div className="flex-1 flex flex-col min-w-0 relative">
         
         {/* Top Header */}
         <header className="h-16 flex-shrink-0 bg-slate-900/50 backdrop-blur-md border-b border-slate-800 flex items-center justify-between px-6 z-40">
@@ -176,6 +309,13 @@ const App: React.FC = () => {
             </div>
 
             <div className="flex items-center gap-4">
+                {/* Simulation Button */}
+                <button 
+                    onClick={handleSimulateHourlyReport}
+                    className="flex items-center gap-2 px-3 py-1.5 bg-blue-600/20 hover:bg-blue-600/40 border border-blue-500/50 rounded-lg text-xs text-blue-300 transition-all">
+                    <Clock size={12} /> Simulate Hour ({simulatedHour}:00)
+                </button>
+                
                 <div className="hidden md:flex items-center gap-2 px-3 py-1.5 bg-green-500/10 border border-green-500/20 rounded-full">
                     <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
                     <span className="text-xs font-mono text-green-400">SYSTEM OPERATIONAL</span>
@@ -194,8 +334,10 @@ const App: React.FC = () => {
                             layers={layers}
                             activeCamera={activeCamera}
                             cameras={cameras}
+                            viewMode={viewMode}
                             onSelectCamera={setSelectedCameraId}
                             onCameraCapture={() => alert("Capturing site image for AI analysis...")}
+                            onSaveTour={handleSaveTour}
                         />
                         
                         {/* Regulatory Chat Overlay (Bottom Left) */}
@@ -230,10 +372,17 @@ const App: React.FC = () => {
                         layerMeta={layerMeta}
                         cameras={cameras}
                         selectedCameraId={selectedCameraId}
+                        viewMode={viewMode}
+                        savedTours={savedTours}
+                        onSetViewMode={setViewMode}
                         toggleLayer={toggleLayer}
                         onRunDroneSurvey={handleRunDroneSurvey}
                         onLayerUpload={handleLayerUpload}
                         onSelectCamera={setSelectedCameraId}
+                        onPlayTour={setPlaybackSession}
+                        onDeleteTour={handleDeleteTour}
+                        onOpenMultiView={() => setIsMultiCameraModalOpen(true)}
+                        onAddCamera={handleAddCamera}
                     />
                 </>
             ) : activeTab === 'inventory' ? (
@@ -245,10 +394,34 @@ const App: React.FC = () => {
                 </div>
             ) : (
                 <div className="w-full h-full">
-                    <ProgressPanel />
+                    <ProgressPanel 
+                        taskLogs={taskLogs} 
+                        aiLogs={aiLogs} 
+                        dailySummary={dailySummary || undefined} 
+                    />
                 </div>
             )}
         </main>
+
+        {/* Video Playback Modal */}
+        {playbackSession && (
+             <TourPlaybackModal 
+                session={playbackSession} 
+                onClose={() => setPlaybackSession(null)} 
+             />
+        )}
+        
+        {/* Multi Camera Modal */}
+        {isMultiCameraModalOpen && (
+            <MultiCameraModal 
+                cameras={cameras} 
+                onClose={() => setIsMultiCameraModalOpen(false)}
+                onSelectCamera={(id) => {
+                    setSelectedCameraId(id);
+                    setIsMultiCameraModalOpen(false);
+                }}
+            />
+        )}
       </div>
     </div>
   );

@@ -1,3 +1,4 @@
+
 export enum ProjectStage {
   SURVEY = 'Site Survey',
   EXCAVATION = 'Excavation',
@@ -12,6 +13,8 @@ export enum WorkStatus {
   IN_PROGRESS = 'IN_PROGRESS', // Blue
   COMPLETED = 'COMPLETED' // Green
 }
+
+export type ViewMode = 'ORBIT' | 'SPLIT' | 'TOUR'; // NEW: View Modes
 
 export interface InventoryItem {
   id: string;
@@ -38,6 +41,7 @@ export interface LayerVisibility {
   excavationRed: boolean; // Planned
   excavationGreen: boolean; // Done
   excavationBlue: boolean; // In Progress
+  bimSlice: boolean; // NEW: Exploded/Sliced View
 }
 
 export type DataSourceType = 'BIM' | 'CAD' | 'ConAI' | 'MANUAL' | null;
@@ -71,6 +75,8 @@ export interface CameraFeed {
   location: string;
   lastSync: string;
   activeZones: string[]; // e.g., ['Zone A - Excavation', 'Zone B - Rebar']
+  streamUrl?: string;   // NEW: URL for the video feed
+  streamType?: 'YOUTUBE' | 'DIRECT' | 'STATIC'; // NEW: Type of feed
 }
 
 // New Types for Progress & BOQ
@@ -93,4 +99,46 @@ export interface TaskLog {
   materials: MaterialUsage[];
   totalCost: number;
   verifiedBy: string;
+}
+
+// AI Reporting Types
+export interface AiLogEntry {
+    id: string;
+    timestamp: string;
+    cameraName: string;
+    description: string; // The "Written Text"
+    detectedObjects: string[];
+}
+
+export interface AiDetection {
+    id: string;
+    label: string; // e.g., JCB, Worker
+    status: 'WORKING' | 'IDLE' | 'MOVING';
+    confidence: number;
+    x: number; // Percentage
+    y: number; // Percentage
+    width: number;
+    height: number;
+}
+
+// 360 Tour Types
+export interface TourLocation {
+    id: string;
+    name: string;
+    imageUrl: string;
+    links: { targetId: string; label: string; x: number; y: number }[]; // x,y in percentage
+}
+
+export interface TourStep {
+    locationId: string;
+    locationName: string;
+    timestamp: string; // ISO string
+}
+
+export interface TourSession {
+    id: string;
+    name: string;
+    date: string;
+    duration: string;
+    steps: TourStep[];
 }
