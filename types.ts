@@ -9,12 +9,12 @@ export enum ProjectStage {
 }
 
 export enum WorkStatus {
-  PENDING = 'PENDING', // Red
-  IN_PROGRESS = 'IN_PROGRESS', // Blue
-  COMPLETED = 'COMPLETED' // Green
+  PENDING = 'PENDING',
+  IN_PROGRESS = 'IN_PROGRESS',
+  COMPLETED = 'COMPLETED'
 }
 
-export type ViewMode = 'ORBIT' | 'SPLIT' | 'TOUR'; // NEW: View Modes
+export type ViewMode = 'ORBIT' | 'SPLIT' | 'TOUR';
 
 export interface InventoryItem {
   id: string;
@@ -29,7 +29,7 @@ export interface SiteMeasurement {
   label: string;
   value: string;
   unit: string;
-  delta?: string; // Change from last survey
+  delta?: string;
 }
 
 export interface LayerVisibility {
@@ -38,33 +38,19 @@ export interface LayerVisibility {
   electrical: boolean;
   interiors: boolean;
   facade: boolean;
-  excavationRed: boolean; // Planned
-  excavationGreen: boolean; // Done
-  excavationBlue: boolean; // In Progress
-  bimSlice: boolean; // NEW: Exploded/Sliced View
+  excavationRed: boolean;
+  excavationGreen: boolean;
+  excavationBlue: boolean;
+  bimSlice: boolean;
 }
 
-export type DataSourceType = 'BIM' | 'CAD' | 'ConAI' | 'MANUAL' | null;
+export type DataSourceType = 'BIM' | 'CAD' | 'ConAI' | 'MANUAL' | 'RECONSTRUCTED' | null;
 
 export interface LayerMetadata {
   id: keyof LayerVisibility;
   hasData: boolean;
   source: DataSourceType;
   lastSynced?: string;
-}
-
-export interface Alert {
-  id: string;
-  type: 'warning' | 'critical' | 'info';
-  message: string;
-  timestamp: string;
-  actionRequired?: boolean;
-}
-
-export interface ProgressUpdate {
-  timestamp: string;
-  description: string;
-  percentage: number;
 }
 
 export interface CameraFeed {
@@ -74,17 +60,16 @@ export interface CameraFeed {
   status: 'RECORDING' | 'IDLE' | 'OFFLINE';
   location: string;
   lastSync: string;
-  activeZones: string[]; // e.g., ['Zone A - Excavation', 'Zone B - Rebar']
-  streamUrl?: string;   // NEW: URL for the video feed
-  streamType?: 'YOUTUBE' | 'DIRECT' | 'STATIC'; // NEW: Type of feed
+  activeZones: string[];
+  streamUrl?: string;
+  streamType?: 'YOUTUBE' | 'DIRECT' | 'STATIC';
 }
 
-// New Types for Progress & BOQ
 export interface MaterialUsage {
   name: string;
   quantity: number;
   unit: string;
-  unitRate: number; // Currency per unit
+  unitRate: number;
   totalCost: number;
 }
 
@@ -92,8 +77,8 @@ export interface TaskLog {
   id: string;
   taskName: string;
   stage: ProjectStage;
-  startTime: string; // ISO String
-  endTime: string;   // ISO String
+  startTime: string;
+  endTime: string;
   durationHours: number;
   status: 'COMPLETED' | 'IN_PROGRESS';
   materials: MaterialUsage[];
@@ -101,38 +86,36 @@ export interface TaskLog {
   verifiedBy: string;
 }
 
-// AI Reporting Types
 export interface AiLogEntry {
     id: string;
     timestamp: string;
     cameraName: string;
-    description: string; // The "Written Text"
+    description: string;
     detectedObjects: string[];
 }
 
 export interface AiDetection {
     id: string;
-    label: string; // e.g., JCB, Worker
+    label: string;
     status: 'WORKING' | 'IDLE' | 'MOVING';
     confidence: number;
-    x: number; // Percentage
-    y: number; // Percentage
+    x: number;
+    y: number;
     width: number;
     height: number;
 }
 
-// 360 Tour Types
 export interface TourLocation {
     id: string;
     name: string;
     imageUrl: string;
-    links: { targetId: string; label: string; x: number; y: number }[]; // x,y in percentage
+    links: { targetId: string; label: string; x: number; y: number }[];
 }
 
 export interface TourStep {
     locationId: string;
     locationName: string;
-    timestamp: string; // ISO string
+    timestamp: string;
 }
 
 export interface TourSession {

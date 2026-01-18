@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { LayerVisibility, WorkStatus, ProjectStage, CameraFeed, ViewMode, TourSession, TourStep, AiDetection } from '../types';
-import { Maximize, Minimize, Layers, Zap, Ruler, Camera, Activity, Video, Radio, Spline, Save, RefreshCw, SplitSquareHorizontal, Move3d, MapPin, AlertCircle, Play, Square, Timer, Navigation, Upload, X, ChevronDown, ChevronLeft, ChevronRight, Link as LinkIcon, Unlink, Download, Trash2, Rotate3d, Scan, Target, Crosshair } from 'lucide-react';
+import { Maximize, Minimize, Layers, Zap, Ruler, Camera, Activity, Video, Radio, Spline, Save, RefreshCw, SplitSquareHorizontal, Move3d, MapPin, AlertCircle, Play, Square, Timer, Navigation, Upload, X, ChevronDown, ChevronLeft, ChevronRight, Link as LinkIcon, Unlink, Download, Trash2, Rotate3d, Scan, Target, Crosshair, Box } from 'lucide-react';
 import { TOUR_LOCATIONS } from '../constants';
 import { analyzeSiteFrame } from '../services/geminiService';
 
@@ -14,49 +14,33 @@ interface ThreeDViewerProps {
   onCameraCapture: () => void;
   onSelectCamera: (id: string | null) => void;
   onSaveTour: (session: TourSession) => void;
+  bimFileName: string | null;
 }
 
 const ThreeDViewer: React.FC<ThreeDViewerProps> = ({ 
-    stage, layers, activeCamera, cameras, viewMode, onCameraCapture, onSelectCamera, onSaveTour
+    stage, layers, activeCamera, cameras, viewMode, onCameraCapture, onSelectCamera, onSaveTour, bimFileName
 }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [isMaximized, setIsMaximized] = useState(false);
   const [precisionMode, setPrecisionMode] = useState(false);
   const [sliceDepth, setSliceDepth] = useState(1);
-  const [isSynced, setIsSynced] = useState(false);
   const [detections, setDetections] = useState<AiDetection[]>([]);
   const [splitPosition, setSplitPosition] = useState(50);
-  const [bimFileName, setBimFileName] = useState<string | null>(null);
-  const [linkedRealityCameraId, setLinkedRealityCameraId] = useState<string | null>(null);
-  const [isCameraDropdownOpen, setIsCameraDropdownOpen] = useState(false);
-  const [bimRotation, setBimRotation] = useState(0);
-  const [isRotatingBim, setIsRotatingBim] = useState(false);
-  const [rotateStartX, setRotateStartX] = useState(0);
+  const [panX, setPanX] = useState(0);
+  const [currentLocationId, setCurrentLocationId] = useState('LOC-A');
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const bimInputRef = useRef<HTMLInputElement>(null);
-
-  // 360 Tour State
-  const [panX, setPanX] = useState(0);
-  const [isDragging, setIsDragging] = useState(false);
-  const [startX, setStartX] = useState(0);
-  const [isRecordingTour, setIsRecordingTour] = useState(false);
-  const [currentLocationId, setCurrentLocationId] = useState('LOC-A');
-  const [tourElapsedTime, setTourElapsedTime] = useState(0);
-  const [tourPath, setTourPath] = useState<TourStep[]>([]);
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
     setIsLoading(true);
     const timer = setTimeout(() => setIsLoading(false), 800);
     return () => clearTimeout(timer);
-  }, [stage, activeCamera, viewMode]);
+  }, [stage, activeCamera, viewMode, bimFileName]);
 
   useEffect(() => {
       let interval: ReturnType<typeof setInterval>;
-      if (activeCamera || (viewMode === 'SPLIT' && linkedRealityCameraId)) {
+      if (activeCamera) {
           interval = setInterval(() => {
              const mockDetections: AiDetection[] = [
                  { id: 'd1', label: 'Excavator', status: Math.random() > 0.3 ? 'WORKING' : 'IDLE', confidence: 0.98, x: 40 + (Math.random() * 5 - 2.5), y: 50 + (Math.random() * 5 - 2.5), width: 20, height: 15 },
@@ -68,18 +52,12 @@ const ThreeDViewer: React.FC<ThreeDViewerProps> = ({
           setDetections([]);
       }
       return () => clearInterval(interval);
-  }, [activeCamera, viewMode, linkedRealityCameraId]);
+  }, [activeCamera]);
 
-  // CORE REFINEMENT: Capture Frame and Analyze with Gemini
   const handleAnalyzeStream = async () => {
     if (!activeCamera) return;
     setIsAnalyzing(true);
-    
-    // In a real browser implementation with direct video, we would draw to canvas:
-    // ctx.drawImage(videoRef.current, 0, 0); const dataUrl = canvas.toDataURL();
-    // For this demo/pitch, we use a placeholder to represent the 'Captured Frame'
     const dummyDataUrl = "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD..."; 
-
     try {
         const result = await analyzeSiteFrame(dummyDataUrl, stage, activeCamera.name);
         alert(`AI Site Audit (${result.isCodeReference}):\n\n${result.visualAudit}\n\nAnomaly Detected: ${result.detectedAnomalies.join(', ') || 'None'}`);
@@ -90,43 +68,6 @@ const ThreeDViewer: React.FC<ThreeDViewerProps> = ({
     }
   };
 
-  const formatTime = (seconds: number) => {
-      const mins = Math.floor(seconds / 60);
-      const secs = seconds % 60;
-      return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-  };
-
-  const handleStartTour = () => {
-      setIsRecordingTour(true);
-      setTourElapsedTime(0);
-      const startLoc = TOUR_LOCATIONS[currentLocationId];
-      setTourPath([{ locationId: startLoc.id, locationName: startLoc.name, timestamp: new Date().toISOString() }]);
-  };
-
-  const handleStopTour = () => {
-      setIsRecordingTour(false);
-      const newSession: TourSession = { id: `SESS-${Date.now()}`, name: `Site Walkthrough ${new Date().toLocaleDateString()}`, date: new Date().toISOString().split('T')[0], duration: formatTime(tourElapsedTime), steps: tourPath };
-      onSaveTour(newSession);
-      setTourPath([]);
-      setTourElapsedTime(0);
-  };
-
-  const handleNavigate = (targetId: string) => {
-      setCurrentLocationId(targetId);
-      setPanX(0);
-      if (isRecordingTour) {
-          const loc = TOUR_LOCATIONS[targetId];
-          setTourPath(prev => [...prev, { locationId: loc.id, locationName: loc.name, timestamp: new Date().toISOString() }]);
-      }
-  };
-
-  const getOverlayStyle = (color: string, sliceIndex: number = 0) => {
-    const isSliced = layers.bimSlice && !activeCamera;
-    const distanceMultiplier = 120 * sliceDepth; 
-    const transform = isSliced ? `translateZ(${sliceIndex * distanceMultiplier}px) translateY(${-sliceIndex * 60 * sliceDepth}px) rotateX(5deg)` : 'translateZ(0px)';
-    return { borderColor: color, boxShadow: `0 0 20px ${color}40`, transform: transform, transition: 'transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1)' };
-  };
-  
   const renderAiOverlay = () => (
       <div className="absolute inset-0 pointer-events-none z-20 overflow-hidden">
           {detections.map(det => (
@@ -156,10 +97,9 @@ const ThreeDViewer: React.FC<ThreeDViewerProps> = ({
 
   return (
     <div className={`${isMaximized ? "fixed inset-0 z-50 bg-slate-950" : "relative w-full h-full bg-slate-900 rounded-xl overflow-hidden border border-slate-700 shadow-2xl"} group transition-all duration-300 select-none`}>
-      
       <canvas ref={canvasRef} className="hidden" width="1280" height="720"></canvas>
 
-      <div className="absolute top-4 left-4 z-20 flex gap-2 pointer-events-none">
+      <div className="absolute top-4 left-4 z-30 flex gap-2 pointer-events-none">
         <div className="bg-slate-800/80 backdrop-blur-md p-2 rounded-lg border border-slate-600 text-slate-300 shadow-lg flex items-center gap-3">
             {activeCamera ? (
                  <div className="flex items-center gap-2">
@@ -167,10 +107,16 @@ const ThreeDViewer: React.FC<ThreeDViewerProps> = ({
                      <span className="text-xs font-mono font-bold text-red-400 uppercase tracking-widest">LIVE: {activeCamera.name}</span>
                  </div>
             ) : <span className="text-xs font-mono font-bold uppercase">{viewMode} VIEW</span>}
+            {bimFileName && !activeCamera && (
+              <div className="flex items-center gap-2 pl-3 border-l border-slate-600">
+                <Box size={14} className="text-cyan-400" />
+                <span className="text-[10px] font-mono text-cyan-400 animate-pulse">{bimFileName}</span>
+              </div>
+            )}
         </div>
       </div>
       
-      <div className="absolute top-4 right-4 z-20 flex flex-col gap-2">
+      <div className="absolute top-4 right-4 z-30 flex flex-col gap-2">
         <button onClick={() => setIsMaximized(!isMaximized)} className="p-2 bg-slate-800/90 hover:bg-slate-700 text-cyan-400 rounded-lg border border-slate-600 transition-all shadow-lg">
           {isMaximized ? <Minimize size={20} /> : <Maximize size={20} />}
         </button>
@@ -188,7 +134,6 @@ const ThreeDViewer: React.FC<ThreeDViewerProps> = ({
       <div className={`w-full h-full transition-opacity duration-500 ${isLoading ? 'opacity-50 blur-sm' : 'opacity-100'}`}>
         {viewMode === 'SPLIT' && !activeCamera && (
             <div className="relative w-full h-full bg-slate-900">
-                {/* Simplified Split View Logic (same as before) */}
                 <div className="absolute inset-0 w-full h-full bg-slate-800">
                     <img src="https://images.unsplash.com/photo-1541888946425-d81bb19240f5?q=80&w=2070&auto=format&fit=crop" alt="Reality" className="w-full h-full object-cover grayscale-[20%]" />
                 </div>
@@ -211,8 +156,9 @@ const ThreeDViewer: React.FC<ThreeDViewerProps> = ({
         )}
 
         {(viewMode === 'ORBIT' || activeCamera) && (
-             <div className="w-full h-full relative overflow-hidden">
+             <div className="w-full h-full relative overflow-hidden flex items-center justify-center bg-slate-950">
                 <div className="absolute inset-0 grid-bg opacity-30 pointer-events-none z-10"></div>
+                
                 {activeCamera ? (
                      <div className="w-full h-full relative">
                          {renderAiOverlay()}
@@ -221,20 +167,60 @@ const ThreeDViewer: React.FC<ThreeDViewerProps> = ({
                          ) : (
                              <video src={activeCamera.streamUrl} autoPlay muted loop playsInline className="w-full h-full object-cover" />
                          )}
-                        <div className="absolute bottom-4 left-4 flex gap-2">
-                             <button 
-                                onClick={() => setPrecisionMode(!precisionMode)}
-                                className={`px-3 py-1.5 rounded-lg text-[10px] font-bold border backdrop-blur-md transition-all flex items-center gap-2 ${precisionMode ? 'bg-cyan-500 border-cyan-400 text-white' : 'bg-black/60 border-white/20 text-slate-400'}`}>
-                                <Target size={12} /> {precisionMode ? 'PRECISION SCAN ACTIVE' : 'STANDARD VIEW'}
-                             </button>
-                        </div>
                      </div>
-                ) : (
-                    <div className="flex items-center justify-center h-full">
-                        <div className="text-center">
-                            <Layers size={48} className="text-slate-700 mx-auto mb-4" />
-                            <p className="text-slate-500 font-mono text-sm uppercase tracking-widest">Master Digital Twin Online</p>
+                ) : bimFileName ? (
+                    <div className="relative w-full h-full flex items-center justify-center perspective-1000">
+                        {/* Simulated 3D BIM Mesh */}
+                        <div className="w-[500px] h-[400px] relative animate-float transition-transform duration-1000" style={{ transformStyle: 'preserve-3d', transform: 'rotateX(60deg) rotateZ(45deg)' }}>
+                            {/* Building Slabs */}
+                            {[0, 1, 2, 3, 4].map(i => (
+                                <div 
+                                    key={i}
+                                    className="absolute inset-0 border-2 border-cyan-500/40 bg-cyan-500/5 backdrop-blur-[1px] transition-all duration-700"
+                                    style={{ 
+                                        transform: `translateZ(${i * 60 * (layers.bimSlice ? sliceDepth : 1)}px)`,
+                                        boxShadow: '0 0 20px rgba(6, 182, 212, 0.1)'
+                                    }}
+                                >
+                                    {/* Grid on Slabs */}
+                                    <div className="absolute inset-0 bg-[radial-gradient(circle,rgba(6,182,212,0.2)_1px,transparent_1px)] bg-[size:20px_20px]"></div>
+                                    {/* Structural Elements */}
+                                    {layers.structural && (
+                                        <div className="absolute inset-4 border border-cyan-400/20 flex items-center justify-center">
+                                            <div className="w-1/2 h-1/2 border-l-4 border-cyan-400/40"></div>
+                                        </div>
+                                    )}
+                                    {/* MEP Elements */}
+                                    {layers.pipes && (
+                                        <div className="absolute inset-0 border-r-4 border-orange-500/30"></div>
+                                    )}
+                                </div>
+                            ))}
+                            {/* Vertical Columns */}
+                            <div className="absolute inset-0 pointer-events-none" style={{ transformStyle: 'preserve-3d' }}>
+                                <div className="absolute left-0 top-0 w-1 bg-cyan-400/30 h-[240px]" style={{ transform: 'rotateX(-90deg)', transformOrigin: 'top' }}></div>
+                                <div className="absolute right-0 top-0 w-1 bg-cyan-400/30 h-[240px]" style={{ transform: 'rotateX(-90deg)', transformOrigin: 'top' }}></div>
+                                <div className="absolute left-0 bottom-0 w-1 bg-cyan-400/30 h-[240px]" style={{ transform: 'rotateX(-90deg)', transformOrigin: 'top' }}></div>
+                                <div className="absolute right-0 bottom-0 w-1 bg-cyan-400/30 h-[240px]" style={{ transform: 'rotateX(-90deg)', transformOrigin: 'top' }}></div>
+                            </div>
                         </div>
+
+                        {/* Tech UI Overlay on 3D */}
+                        <div className="absolute bottom-20 left-10 space-y-2 animate-in slide-in-from-left duration-1000">
+                            <div className="flex items-center gap-2 text-cyan-400 font-mono text-[10px] bg-slate-900/80 px-2 py-1 rounded border border-cyan-900/50">
+                                <div className="w-1.5 h-1.5 bg-cyan-400 rounded-full animate-ping"></div>
+                                RENDER_ENGINE: STABLE
+                            </div>
+                            <div className="flex items-center gap-2 text-slate-400 font-mono text-[10px] bg-slate-900/80 px-2 py-1 rounded border border-slate-800">
+                                GEOM_VERTS: 142.5k
+                            </div>
+                        </div>
+                    </div>
+                ) : (
+                    <div className="text-center animate-in zoom-in duration-700">
+                        <Layers size={48} className="text-slate-800 mx-auto mb-4" />
+                        <p className="text-slate-500 font-mono text-xs uppercase tracking-[0.2em] mb-2">Awaiting Data Sync</p>
+                        <p className="text-slate-700 text-[10px] uppercase font-bold">Connect BIM File in Sidebar to Initialize Twin</p>
                     </div>
                 )}
              </div>
@@ -249,6 +235,19 @@ const ThreeDViewer: React.FC<ThreeDViewerProps> = ({
           </div>
         </div>
       )}
+
+      <style>{`
+        @keyframes float {
+          0%, 100% { transform: rotateX(60deg) rotateZ(45deg) translateY(0); }
+          50% { transform: rotateX(60deg) rotateZ(45deg) translateY(-20px); }
+        }
+        .animate-float {
+          animation: float 6s ease-in-out infinite;
+        }
+        .perspective-1000 {
+          perspective: 1200px;
+        }
+      `}</style>
     </div>
   );
 };
