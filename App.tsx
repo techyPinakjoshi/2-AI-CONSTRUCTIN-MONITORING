@@ -12,7 +12,8 @@ import LandingChat from './components/LandingChat';
 import AuthModal from './components/AuthModal';
 import AdminDashboard from './components/AdminDashboard';
 import BoqDashboard from './components/BoqDashboard';
-import { LayoutDashboard, Package, Activity, LogOut, ShieldCheck, ClipboardList, Briefcase, Zap, Crown } from 'lucide-react';
+import ProjectCreationModal from './components/ProjectCreationModal';
+import { LayoutDashboard, Package, Activity, LogOut, ShieldCheck, ClipboardList, Briefcase, Zap, Crown, Plus } from 'lucide-react';
 import { fetchUserProjects, saveProjectData } from './services/dbService';
 
 type UserState = {
@@ -28,6 +29,8 @@ const App: React.FC = () => {
   const [authState, setAuthState] = useState<UserState>({ user: null, loading: false, isAdmin: false, isSubscribed: false });
   const [view, setView] = useState<ViewState>('landing');
   const [showAuth, setShowAuth] = useState(false);
+  const [showProjectCreation, setShowProjectCreation] = useState(false);
+  const [activeProject, setActiveProject] = useState<any>(null);
   const [userProjects, setUserProjects] = useState<any[]>([]);
   
   const [activeTab, setActiveTab] = useState<'dashboard' | 'inventory' | 'progress'>('dashboard');
@@ -65,16 +68,6 @@ const App: React.FC = () => {
     bimSlice: { id: 'bimSlice', hasData: true, source: 'BIM' },
   });
 
-  useEffect(() => {
-    if (authState.user) {
-      const loadData = async () => {
-        const projects = await fetchUserProjects(authState.user.id);
-        setUserProjects(projects);
-      };
-      loadData();
-    }
-  }, [authState.user]);
-
   const handleLoginSuccess = (user: any) => {
     const isAdmin = user.email === 'admin@constructai.com';
     setAuthState({ user, loading: false, isAdmin, isSubscribed: false });
@@ -85,15 +78,28 @@ const App: React.FC = () => {
     setAuthState({ user: null, loading: false, isAdmin: false, isSubscribed: false });
     setView('landing');
     setUploadedBimName(null);
+    setActiveProject(null);
   };
 
-  const unlockMonitoring = () => {
+  const startPremiumOnboarding = () => {
     if (!authState.user) {
       setShowAuth(true);
       return;
     }
+    setShowProjectCreation(true);
+  };
+
+  const handleCreateProject = (projectData: any) => {
+    const newProject = { ...projectData, id: Date.now().toString() };
+    setUserProjects(prev => [...prev, newProject]);
+    setActiveProject(newProject);
     setAuthState(prev => ({ ...prev, isSubscribed: true }));
     setView('monitoring-app');
+    setShowProjectCreation(false);
+  };
+
+  const handleRenameCamera = (id: string, newName: string) => {
+    setCameras(prev => prev.map(cam => cam.id === id ? { ...cam, name: newName } : cam));
   };
 
   const toggleLayer = (key: keyof LayerVisibility) => setLayers(prev => ({ ...prev, [key]: !prev[key] }));
@@ -108,17 +114,18 @@ const App: React.FC = () => {
     return (
       <LandingChat 
         onAuthRequired={() => setShowAuth(true)} 
-        onEnterApp={unlockMonitoring}
+        onEnterApp={startPremiumOnboarding}
         onOpenBoqDashboard={() => setView('boq-pm-suite')}
         user={authState.user}
       >
         {showAuth && <AuthModal onClose={() => setShowAuth(false)} onLogin={handleLoginSuccess} />}
+        {showProjectCreation && <ProjectCreationModal onClose={() => setShowProjectCreation(false)} onCreate={handleCreateProject} />}
       </LandingChat>
     );
   }
 
   if (view === 'boq-pm-suite') {
-    return <BoqDashboard onClose={() => setView('landing')} onUpgrade={unlockMonitoring} />;
+    return <BoqDashboard onClose={() => setView('landing')} onUpgrade={startPremiumOnboarding} />;
   }
 
   if (view === 'admin' && authState.isAdmin) {
@@ -155,8 +162,8 @@ const App: React.FC = () => {
       <div className="flex-1 flex flex-col min-w-0 relative">
         <header className="h-16 flex-shrink-0 bg-slate-900/50 backdrop-blur-md border-b border-slate-800 flex items-center justify-between px-6 z-40">
             <div className="flex items-center gap-4">
-                <h1 className="text-xl font-bold tracking-tight text-white hidden md:block">
-                  {userProjects[0]?.name || "Premium Monitor"} 
+                <h1 className="text-xl font-bold tracking-tight text-white hidden md:block uppercase italic">
+                  {activeProject?.name || "Premium Monitor"} 
                   <span className="text-slate-600 font-light mx-2">|</span> 
                   <span className="text-blue-400">
                     {currentStage} AI-Vision Active
@@ -166,7 +173,7 @@ const App: React.FC = () => {
             <div className="flex items-center gap-4">
                   <div className="flex items-center gap-2 px-3 py-1.5 bg-blue-500/10 border border-blue-500/20 rounded-full">
                     <Crown size={14} className="text-blue-400" />
-                    <span className="text-[10px] font-bold text-blue-400 uppercase tracking-widest">AI QUANTUM MONITORING</span>
+                    <span className="text-[10px] font-bold text-blue-400 uppercase tracking-widest tracking-tighter">AI QUANTUM MONITORING</span>
                   </div>
             </div>
         </header>
@@ -195,8 +202,9 @@ const App: React.FC = () => {
             )}
         </main>
       </div>
-      {isMultiCameraModalOpen && <MultiCameraModal cameras={cameras} onClose={() => setIsMultiCameraModalOpen(false)} onSelectCamera={(id) => setSelectedCameraId(id)} />}
+      {isMultiCameraModalOpen && <MultiCameraModal cameras={cameras} onClose={() => setIsMultiCameraModalOpen(false)} onSelectCamera={(id) => setSelectedCameraId(id)} onRenameCamera={handleRenameCamera} />}
       {playbackSession && <TourPlaybackModal session={playbackSession} onClose={() => setPlaybackSession(null)} />}
+      {showProjectCreation && <ProjectCreationModal onClose={() => setShowProjectCreation(false)} onCreate={handleCreateProject} />}
     </div>
   );
 };
