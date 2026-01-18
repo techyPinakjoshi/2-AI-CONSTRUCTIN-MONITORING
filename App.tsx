@@ -11,6 +11,7 @@ import MultiCameraModal from './components/MultiCameraModal';
 import LandingChat from './components/LandingChat';
 import AuthModal from './components/AuthModal';
 import AdminDashboard from './components/AdminDashboard';
+import BoqDashboard from './components/BoqDashboard';
 import { LayoutDashboard, Package, Activity, LogOut, ShieldCheck, ClipboardList, Briefcase, Zap, Crown } from 'lucide-react';
 import { fetchUserProjects, saveProjectData } from './services/dbService';
 
@@ -21,9 +22,11 @@ type UserState = {
   isSubscribed: boolean;
 };
 
+type ViewState = 'landing' | 'monitoring-app' | 'boq-pm-suite' | 'admin';
+
 const App: React.FC = () => {
   const [authState, setAuthState] = useState<UserState>({ user: null, loading: false, isAdmin: false, isSubscribed: false });
-  const [view, setView] = useState<'landing' | 'app' | 'admin'>('landing');
+  const [view, setView] = useState<ViewState>('landing');
   const [showAuth, setShowAuth] = useState(false);
   const [userProjects, setUserProjects] = useState<any[]>([]);
   
@@ -76,7 +79,6 @@ const App: React.FC = () => {
     const isAdmin = user.email === 'admin@constructai.com';
     setAuthState({ user, loading: false, isAdmin, isSubscribed: false });
     setShowAuth(false);
-    setView('app');
   };
 
   const handleLogout = () => {
@@ -85,20 +87,13 @@ const App: React.FC = () => {
     setUploadedBimName(null);
   };
 
-  const toggleSubscription = () => {
-    setAuthState(prev => ({ ...prev, isSubscribed: !prev.isSubscribed }));
-    alert(authState.isSubscribed ? "Switching to Standard Mode" : "AI Monitoring Activated! Accessing Primary Vision Engine.");
-  };
-
-  const handleSaveCurrentProject = async () => {
-    if (!authState.user) return;
-    await saveProjectData(authState.user.id, {
-      stage: currentStage,
-      inventory,
-      measurements,
-      bimName: uploadedBimName
-    });
-    alert("Project saved to your account database.");
+  const unlockMonitoring = () => {
+    if (!authState.user) {
+      setShowAuth(true);
+      return;
+    }
+    setAuthState(prev => ({ ...prev, isSubscribed: true }));
+    setView('monitoring-app');
   };
 
   const toggleLayer = (key: keyof LayerVisibility) => setLayers(prev => ({ ...prev, [key]: !prev[key] }));
@@ -113,7 +108,8 @@ const App: React.FC = () => {
     return (
       <LandingChat 
         onAuthRequired={() => setShowAuth(true)} 
-        onEnterApp={() => authState.user ? setView('app') : setShowAuth(true)}
+        onEnterApp={unlockMonitoring}
+        onOpenBoqDashboard={() => setView('boq-pm-suite')}
         user={authState.user}
       >
         {showAuth && <AuthModal onClose={() => setShowAuth(false)} onLogin={handleLoginSuccess} />}
@@ -121,8 +117,12 @@ const App: React.FC = () => {
     );
   }
 
+  if (view === 'boq-pm-suite') {
+    return <BoqDashboard onClose={() => setView('landing')} onUpgrade={unlockMonitoring} />;
+  }
+
   if (view === 'admin' && authState.isAdmin) {
-    return <AdminDashboard onClose={() => setView('app')} />;
+    return <AdminDashboard onClose={() => setView('monitoring-app')} />;
   }
 
   return (
@@ -141,11 +141,11 @@ const App: React.FC = () => {
         </div>
         <div className="mt-auto mb-4 flex flex-col gap-4 items-center">
             <button 
-              onClick={toggleSubscription} 
-              className={`p-3 rounded-xl transition-all ${authState.isSubscribed ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/30' : 'text-slate-500 hover:text-blue-400'}`} 
-              title={authState.isSubscribed ? "Premium Active" : "Upgrade to AI"}
+              onClick={() => setView('boq-pm-suite')} 
+              className="p-3 rounded-xl text-slate-500 hover:text-orange-400 transition-all" 
+              title="Return to PM Dashboard"
             >
-              <Zap size={24} />
+              <Briefcase size={24} />
             </button>
             <button onClick={handleLogout} className="p-3 rounded-xl text-slate-500 hover:text-red-400 transition-all" title="Logout"><LogOut size={24} /></button>
             <div className="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center text-[10px] font-bold border border-slate-600">{authState.user?.email?.[0].toUpperCase()}</div>
@@ -156,25 +156,18 @@ const App: React.FC = () => {
         <header className="h-16 flex-shrink-0 bg-slate-900/50 backdrop-blur-md border-b border-slate-800 flex items-center justify-between px-6 z-40">
             <div className="flex items-center gap-4">
                 <h1 className="text-xl font-bold tracking-tight text-white hidden md:block">
-                  {userProjects[0]?.name || "New Project"} 
+                  {userProjects[0]?.name || "Premium Monitor"} 
                   <span className="text-slate-600 font-light mx-2">|</span> 
-                  <span className={`${authState.isSubscribed ? 'text-blue-400' : 'text-cyan-400'}`}>
-                    {currentStage} {authState.isSubscribed ? 'AI-Verified' : 'Manual'} Phase
+                  <span className="text-blue-400">
+                    {currentStage} AI-Vision Active
                   </span>
                 </h1>
             </div>
             <div className="flex items-center gap-4">
-                {authState.isSubscribed ? (
                   <div className="flex items-center gap-2 px-3 py-1.5 bg-blue-500/10 border border-blue-500/20 rounded-full">
                     <Crown size={14} className="text-blue-400" />
-                    <span className="text-[10px] font-bold text-blue-400 uppercase tracking-widest">AI PREMIUM ACTIVE</span>
+                    <span className="text-[10px] font-bold text-blue-400 uppercase tracking-widest">AI QUANTUM MONITORING</span>
                   </div>
-                ) : (
-                  <button onClick={toggleSubscription} className="flex items-center gap-2 px-3 py-1.5 bg-orange-500/10 border border-orange-500/20 rounded-full hover:bg-orange-500/20 transition-all">
-                    <Zap size={14} className="text-orange-400" />
-                    <span className="text-[10px] font-bold text-orange-400 uppercase tracking-widest underline decoration-orange-500/30">Unlock AI Monitoring</span>
-                  </button>
-                )}
             </div>
         </header>
 
@@ -186,20 +179,19 @@ const App: React.FC = () => {
                           stage={currentStage} layers={layers} activeCamera={activeCamera} cameras={cameras} 
                           viewMode={viewMode} onSelectCamera={setSelectedCameraId} onCameraCapture={() => {}} onSaveTour={() => {}} 
                           bimFileName={uploadedBimName}
-                          isPremium={authState.isSubscribed}
                         />
                     </div>
                     <Sidebar 
                       currentStage={currentStage} measurements={measurements} layers={layers} layerMeta={layerMeta} cameras={cameras} selectedCameraId={selectedCameraId} viewMode={viewMode} savedTours={savedTours} 
                       onSetViewMode={setViewMode} toggleLayer={toggleLayer} onRunDroneSurvey={() => {}} onLayerUpload={handleLayerUpload} onSelectCamera={setSelectedCameraId} onPlayTour={setPlaybackSession} onDeleteTour={() => {}} onOpenMultiView={() => setIsMultiCameraModalOpen(true)} onAddCamera={() => {}} 
                       bimFileName={uploadedBimName} onBimFileSelect={setUploadedBimName}
-                      isPremium={authState.isSubscribed}
+                      isPremium={true}
                     />
                 </>
             ) : activeTab === 'inventory' ? (
-                <InventoryPanel inventory={inventory} onRestockRequest={() => {}} isPremium={authState.isSubscribed} />
+                <InventoryPanel inventory={inventory} onRestockRequest={() => {}} />
             ) : (
-                <ProgressPanel taskLogs={taskLogs} aiLogs={aiLogs} isPremium={authState.isSubscribed} />
+                <ProgressPanel taskLogs={taskLogs} aiLogs={aiLogs} isPremium={true} />
             )}
         </main>
       </div>
