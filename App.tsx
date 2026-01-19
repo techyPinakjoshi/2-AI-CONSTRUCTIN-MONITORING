@@ -1,7 +1,7 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { ProjectStage, CameraFeed, TaskLog, AiLogEntry, InventoryItem, SiteMeasurement, LayerVisibility, LayerMetadata, DataSourceType, TourSession, ViewMode } from './types';
-import { INITIAL_INVENTORY, STAGES, MOCK_CAMERAS, INITIAL_TOUR_SESSIONS, MOCK_TASK_LOGS } from './constants';
+import { INITIAL_INVENTORY, MOCK_CAMERAS, INITIAL_TOUR_SESSIONS, MOCK_TASK_LOGS } from './constants';
 import ThreeDViewer from './components/ThreeDViewer';
 import Sidebar from './components/Sidebar';
 import InventoryPanel from './components/InventoryPanel';
@@ -13,8 +13,9 @@ import AuthModal from './components/AuthModal';
 import AdminDashboard from './components/AdminDashboard';
 import BoqDashboard from './components/BoqDashboard';
 import ProjectCreationModal from './components/ProjectCreationModal';
-import { LayoutDashboard, Package, Activity, LogOut, ShieldCheck, ClipboardList, Briefcase, Zap, Crown, Plus } from 'lucide-react';
+import { LayoutDashboard, Package, Activity, LogOut, ShieldCheck, ClipboardList, Briefcase, Zap, Crown } from 'lucide-react';
 import { fetchUserProjects, saveProjectData } from './services/dbService';
+import { supabase } from './services/supabaseClient';
 
 type UserState = {
   user: any | null;
@@ -26,7 +27,7 @@ type UserState = {
 type ViewState = 'landing' | 'monitoring-app' | 'boq-pm-suite' | 'admin';
 
 const App: React.FC = () => {
-  const [authState, setAuthState] = useState<UserState>({ user: null, loading: false, isAdmin: false, isSubscribed: false });
+  const [authState, setAuthState] = useState<UserState>({ user: null, loading: true, isAdmin: false, isSubscribed: false });
   const [view, setView] = useState<ViewState>('landing');
   const [showAuth, setShowAuth] = useState(false);
   const [showProjectCreation, setShowProjectCreation] = useState(false);
@@ -34,24 +35,16 @@ const App: React.FC = () => {
   const [userProjects, setUserProjects] = useState<any[]>([]);
   
   const [activeTab, setActiveTab] = useState<'dashboard' | 'inventory' | 'progress'>('dashboard');
-  const [currentStage, setCurrentStage] = useState<ProjectStage>(ProjectStage.EXCAVATION);
-  const [inventory, setInventory] = useState<InventoryItem[]>(INITIAL_INVENTORY);
+  const [currentStage] = useState<ProjectStage>(ProjectStage.EXCAVATION);
+  const [inventory] = useState<InventoryItem[]>(INITIAL_INVENTORY);
   const [cameras, setCameras] = useState<CameraFeed[]>(MOCK_CAMERAS);
   const [selectedCameraId, setSelectedCameraId] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>('ORBIT');
-  const [savedTours, setSavedTours] = useState<TourSession[]>(INITIAL_TOUR_SESSIONS);
+  const [savedTours] = useState<TourSession[]>(INITIAL_TOUR_SESSIONS);
   const [playbackSession, setPlaybackSession] = useState<TourSession | null>(null);
   const [isMultiCameraModalOpen, setIsMultiCameraModalOpen] = useState(false);
   const [uploadedBimName, setUploadedBimName] = useState<string | null>(null);
 
-  const [measurements, setMeasurements] = useState<SiteMeasurement[]>([
-    { label: 'Total Area', value: '45,200', unit: 'sq.ft', delta: '+0%' },
-    { label: 'Excavated Volume', value: '12,500', unit: 'cu.m', delta: '+12%' },
-    { label: 'Max Depth', value: '8.4', unit: 'm', delta: '+0.5m' },
-    { label: 'Soil Density', value: '1.85', unit: 'g/cc' },
-  ]);
-  const [taskLogs, setTaskLogs] = useState<TaskLog[]>(MOCK_TASK_LOGS);
-  const [aiLogs, setAiLogs] = useState<AiLogEntry[]>([]);
   const [layers, setLayers] = useState<LayerVisibility>({
     structural: true, pipes: false, electrical: false, interiors: false, facade: false,
     excavationRed: true, excavationGreen: true, excavationBlue: true, bimSlice: false,
@@ -68,38 +61,85 @@ const App: React.FC = () => {
     bimSlice: { id: 'bimSlice', hasData: true, source: 'BIM' },
   });
 
-  const handleLoginSuccess = (user: any) => {
+  const handleLoginSuccess = useCallback(async (user: any) => {
+    if (!user) return;
     const isAdmin = user.email === 'admin@constructai.com';
-    setAuthState({ user, loading: false, isAdmin, isSubscribed: false });
+    
+    // Only update if the user has actually changed to avoid render loops
+    setAuthState(prev => {
+        if (prev.user?.id === user.id) return prev;
+        return { user, loading: false, isAdmin, isSubscribed: false };
+    });
+    
     setShowAuth(false);
-  };
+    const projects = await fetchUserProjects(user.id);
+    setUserProjects(projects);
+    if (projects.length > 0) {
+      setAuthState(prev => ({ ...prev, isSubscribed: true }));
+    }
+  }, []);
 
-  const handleLogout = () => {
+  const handleLogout = useCallback(async () => {
+    await supabase.auth.signOut();
     setAuthState({ user: null, loading: false, isAdmin: false, isSubscribed: false });
     setView('landing');
     setUploadedBimName(null);
     setActiveProject(null);
-  };
+    setUserProjects([]);
+  }, []);
+
+  useEffect(() => {
+    let mounted = true;
+
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (mounted && session?.user) {
+        handleLoginSuccess(session.user);
+      } else if (mounted) {
+        setAuthState(prev => ({ ...prev, loading: false }));
+      }
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (mounted) {
+        if (session?.user) {
+          handleLoginSuccess(session.user);
+        } else {
+          handleLogout();
+        }
+      }
+    });
+
+    return () => {
+        mounted = false;
+        subscription.unsubscribe();
+    };
+  }, [handleLoginSuccess, handleLogout]);
 
   const startPremiumOnboarding = () => {
     if (!authState.user) {
       setShowAuth(true);
       return;
     }
-    setShowProjectCreation(true);
+    if (userProjects.length > 0 && !activeProject) {
+        setActiveProject(userProjects[0]);
+        setView('monitoring-app');
+        setAuthState(prev => ({ ...prev, isSubscribed: true }));
+    } else {
+        setShowProjectCreation(true);
+    }
   };
 
-  const handleCreateProject = (projectData: any) => {
-    const newProject = { ...projectData, id: Date.now().toString() };
-    setUserProjects(prev => [...prev, newProject]);
-    setActiveProject(newProject);
-    setAuthState(prev => ({ ...prev, isSubscribed: true }));
-    setView('monitoring-app');
-    setShowProjectCreation(false);
-  };
-
-  const handleRenameCamera = (id: string, newName: string) => {
-    setCameras(prev => prev.map(cam => cam.id === id ? { ...cam, name: newName } : cam));
+  const handleCreateProject = async (projectData: any) => {
+    if (!authState.user) return;
+    const result = await saveProjectData(authState.user.id, projectData);
+    if (result.success) {
+      const projects = await fetchUserProjects(authState.user.id);
+      setUserProjects(projects);
+      setActiveProject(projects[projects.length - 1]);
+      setAuthState(prev => ({ ...prev, isSubscribed: true }));
+      setView('monitoring-app');
+      setShowProjectCreation(false);
+    }
   };
 
   const toggleLayer = (key: keyof LayerVisibility) => setLayers(prev => ({ ...prev, [key]: !prev[key] }));
@@ -109,6 +149,15 @@ const App: React.FC = () => {
   };
 
   const activeCamera = selectedCameraId ? cameras.find(c => c.id === selectedCameraId) || null : null;
+
+  if (authState.loading) {
+    return (
+      <div className="h-screen w-full bg-slate-950 flex flex-col items-center justify-center">
+        <Zap className="text-cyan-400 animate-pulse mb-4" size={48} />
+        <div className="text-[10px] font-black text-slate-500 uppercase tracking-[0.4em]">Establishing Neural Sync...</div>
+      </div>
+    );
+  }
 
   if (view === 'landing') {
     return (
@@ -147,13 +196,7 @@ const App: React.FC = () => {
             )}
         </div>
         <div className="mt-auto mb-4 flex flex-col gap-4 items-center">
-            <button 
-              onClick={() => setView('boq-pm-suite')} 
-              className="p-3 rounded-xl text-slate-500 hover:text-orange-400 transition-all" 
-              title="Return to PM Dashboard"
-            >
-              <Briefcase size={24} />
-            </button>
+            <button onClick={() => setView('boq-pm-suite')} className="p-3 rounded-xl text-slate-500 hover:text-orange-400 transition-all" title="Return to PM Dashboard"><Briefcase size={24} /></button>
             <button onClick={handleLogout} className="p-3 rounded-xl text-slate-500 hover:text-red-400 transition-all" title="Logout"><LogOut size={24} /></button>
             <div className="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center text-[10px] font-bold border border-slate-600">{authState.user?.email?.[0].toUpperCase()}</div>
         </div>
@@ -161,20 +204,14 @@ const App: React.FC = () => {
 
       <div className="flex-1 flex flex-col min-w-0 relative">
         <header className="h-16 flex-shrink-0 bg-slate-900/50 backdrop-blur-md border-b border-slate-800 flex items-center justify-between px-6 z-40">
-            <div className="flex items-center gap-4">
-                <h1 className="text-xl font-bold tracking-tight text-white hidden md:block uppercase italic">
-                  {activeProject?.name || "Premium Monitor"} 
-                  <span className="text-slate-600 font-light mx-2">|</span> 
-                  <span className="text-blue-400">
-                    {currentStage} AI-Vision Active
-                  </span>
-                </h1>
-            </div>
-            <div className="flex items-center gap-4">
-                  <div className="flex items-center gap-2 px-3 py-1.5 bg-blue-500/10 border border-blue-500/20 rounded-full">
-                    <Crown size={14} className="text-blue-400" />
-                    <span className="text-[10px] font-bold text-blue-400 uppercase tracking-widest tracking-tighter">AI QUANTUM MONITORING</span>
-                  </div>
+            <h1 className="text-xl font-bold tracking-tight text-white hidden md:block uppercase italic">
+              {activeProject?.name || "Premium Monitor"} 
+              <span className="text-slate-600 font-light mx-2">|</span> 
+              <span className="text-blue-400">{currentStage} AI-Vision Active</span>
+            </h1>
+            <div className="flex items-center gap-2 px-3 py-1.5 bg-blue-500/10 border border-blue-500/20 rounded-full">
+              <Crown size={14} className="text-blue-400" />
+              <span className="text-[10px] font-bold text-blue-400 uppercase tracking-widest">AI QUANTUM MONITORING</span>
             </div>
         </header>
 
@@ -189,7 +226,7 @@ const App: React.FC = () => {
                         />
                     </div>
                     <Sidebar 
-                      currentStage={currentStage} measurements={measurements} layers={layers} layerMeta={layerMeta} cameras={cameras} selectedCameraId={selectedCameraId} viewMode={viewMode} savedTours={savedTours} 
+                      currentStage={currentStage} measurements={[]} layers={layers} layerMeta={layerMeta} cameras={cameras} selectedCameraId={selectedCameraId} viewMode={viewMode} savedTours={savedTours} 
                       onSetViewMode={setViewMode} toggleLayer={toggleLayer} onRunDroneSurvey={() => {}} onLayerUpload={handleLayerUpload} onSelectCamera={setSelectedCameraId} onPlayTour={setPlaybackSession} onDeleteTour={() => {}} onOpenMultiView={() => setIsMultiCameraModalOpen(true)} onAddCamera={() => {}} 
                       bimFileName={uploadedBimName} onBimFileSelect={setUploadedBimName}
                       isPremium={true}
@@ -198,13 +235,12 @@ const App: React.FC = () => {
             ) : activeTab === 'inventory' ? (
                 <InventoryPanel inventory={inventory} onRestockRequest={() => {}} />
             ) : (
-                <ProgressPanel taskLogs={taskLogs} aiLogs={aiLogs} isPremium={true} />
+                <ProgressPanel taskLogs={MOCK_TASK_LOGS} aiLogs={[]} isPremium={true} />
             )}
         </main>
       </div>
-      {isMultiCameraModalOpen && <MultiCameraModal cameras={cameras} onClose={() => setIsMultiCameraModalOpen(false)} onSelectCamera={(id) => setSelectedCameraId(id)} onRenameCamera={handleRenameCamera} />}
+      {isMultiCameraModalOpen && <MultiCameraModal cameras={cameras} onClose={() => setIsMultiCameraModalOpen(false)} onSelectCamera={(id) => setSelectedCameraId(id)} onRenameCamera={(id, name) => setCameras(prev => prev.map(c => c.id === id ? {...c, name} : c))} />}
       {playbackSession && <TourPlaybackModal session={playbackSession} onClose={() => setPlaybackSession(null)} />}
-      {showProjectCreation && <ProjectCreationModal onClose={() => setShowProjectCreation(false)} onCreate={handleCreateProject} />}
     </div>
   );
 };
