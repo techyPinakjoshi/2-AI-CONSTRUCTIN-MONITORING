@@ -1,6 +1,6 @@
 
-import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { ProjectStage, CameraFeed, TaskLog, AiLogEntry, InventoryItem, SiteMeasurement, LayerVisibility, LayerMetadata, DataSourceType, TourSession, ViewMode } from './types';
+import React, { useState, useEffect, useCallback } from 'react';
+import { ProjectStage, CameraFeed, InventoryItem, TourSession, ViewMode, LayerVisibility, LayerMetadata, DataSourceType } from './types';
 import { INITIAL_INVENTORY, MOCK_CAMERAS, INITIAL_TOUR_SESSIONS, MOCK_TASK_LOGS } from './constants';
 import ThreeDViewer from './components/ThreeDViewer';
 import Sidebar from './components/Sidebar';
@@ -63,20 +63,21 @@ const App: React.FC = () => {
 
   const handleLoginSuccess = useCallback(async (user: any) => {
     if (!user) return;
-    const isAdmin = user.email === 'admin@constructai.com';
     
-    // Only update if the user has actually changed to avoid render loops
+    // Stable Auth Update
     setAuthState(prev => {
         if (prev.user?.id === user.id) return prev;
-        return { user, loading: false, isAdmin, isSubscribed: false };
+        return { user, loading: false, isAdmin: user.email === 'admin@constructai.com', isSubscribed: false };
     });
     
     setShowAuth(false);
-    const projects = await fetchUserProjects(user.id);
-    setUserProjects(projects);
-    if (projects.length > 0) {
-      setAuthState(prev => ({ ...prev, isSubscribed: true }));
-    }
+    try {
+        const projects = await fetchUserProjects(user.id);
+        setUserProjects(projects);
+        if (projects.length > 0) {
+          setAuthState(prev => ({ ...prev, isSubscribed: true }));
+        }
+    } catch (e) { console.error("Project fetch failed", e); }
   }, []);
 
   const handleLogout = useCallback(async () => {
@@ -91,21 +92,25 @@ const App: React.FC = () => {
   useEffect(() => {
     let mounted = true;
 
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (mounted && session?.user) {
-        handleLoginSuccess(session.user);
-      } else if (mounted) {
-        setAuthState(prev => ({ ...prev, loading: false }));
-      }
-    });
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const initAuth = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
       if (mounted) {
         if (session?.user) {
           handleLoginSuccess(session.user);
         } else {
-          handleLogout();
+          setAuthState(prev => ({ ...prev, loading: false }));
         }
+      }
+    };
+
+    initAuth();
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (!mounted) return;
+      if (session?.user) {
+        handleLoginSuccess(session.user);
+      } else if (_event === 'SIGNED_OUT') {
+        handleLogout();
       }
     });
 
@@ -123,7 +128,6 @@ const App: React.FC = () => {
     if (userProjects.length > 0 && !activeProject) {
         setActiveProject(userProjects[0]);
         setView('monitoring-app');
-        setAuthState(prev => ({ ...prev, isSubscribed: true }));
     } else {
         setShowProjectCreation(true);
     }
@@ -184,7 +188,7 @@ const App: React.FC = () => {
   return (
     <div className="flex h-screen w-full overflow-hidden bg-slate-900 text-slate-200 font-sans">
       <nav className="w-16 md:w-20 flex-shrink-0 flex flex-col items-center py-6 bg-slate-900 border-r border-slate-800 z-50">
-        <div className="mb-8 p-2 bg-gradient-to-br from-cyan-500 to-blue-600 rounded-xl shadow-lg shadow-cyan-500/20">
+        <div className="mb-8 p-2 bg-gradient-to-br from-cyan-500 to-blue-600 rounded-xl shadow-lg">
             <Activity className="text-white" size={24} />
         </div>
         <div className="flex flex-col gap-6 w-full items-center">
