@@ -2,105 +2,93 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { ProjectStage, TaskLog, AiLogEntry } from "../types";
 
+// Initialize the GoogleGenAI client with the required named parameter.
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || 'demo_mode' });
 
 /**
- * REFINED MODEL: Analyzes a specific frame from the construction site.
- * This function is the core of our "Digital Verification" engine.
+ * Extracts a unified BOQ from multiple uploaded construction plans.
  */
-export const analyzeSiteFrame = async (imageData: string, stage: ProjectStage, cameraName: string) => {
+export const extractBoqFromPlans = async (planNames: string[]) => {
   try {
-    if (!process.env.API_KEY) throw new Error("Demo Mode");
+    if (!process.env.API_KEY || process.env.API_KEY === 'demo_mode') throw new Error("Demo Mode");
 
     const prompt = `
-      As a Senior Civil Engineer expert in Indian Standard (IS) Codes:
-      1. Analyze this image from camera '${cameraName}' at stage '${stage}'.
-      2. Identify structural elements: Rebar (IS 1786), Concrete (IS 456), or Earthwork (IS 1200).
-      3. Cross-verify visually with standard practices.
-      4. Detect safety violations (PPE, scaffolding).
-      5. Estimate Task Completion % based on visible reinforcement/excavation.
-
-      Return JSON following the specified schema.
+      Act as an expert Quantity Surveyor. Analyze the context of these uploaded plans: ${planNames.join(', ')}.
+      Generate a unified Bill of Quantities (BOQ) following IS 1200 (Indian Standard Method of Measurement).
+      Include:
+      1. Item Codes (SOR aligned).
+      2. Comprehensive descriptions.
+      3. Precise quantities synthesized from multiple plan cross-referencing.
+      4. Standard unit rates for 2024-25.
+      
+      Return a JSON array of objects with keys: id, code, category, description, qty, unit, rate, amount.
     `;
 
+    // Correctly call ai.models.generateContent instead of defining a model first.
     const result = await ai.models.generateContent({
-      model: 'gemini-2.5-flash-image',
-      contents: [
-        { text: prompt },
-        { inlineData: { mimeType: "image/jpeg", data: imageData.split(',')[1] } }
-      ],
+      model: 'gemini-3-pro-preview',
+      contents: [{ text: prompt }],
       config: {
         responseMimeType: "application/json",
         responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            isCodeReference: { type: Type.STRING, description: "Specific IS code being applied" },
-            visualAudit: { type: Type.STRING },
-            progressPercentage: { type: Type.NUMBER },
-            detectedAnomalies: { type: Type.ARRAY, items: { type: Type.STRING } },
-            boqUpdate: {
-              type: Type.OBJECT,
-              properties: {
-                item: { type: Type.STRING },
-                quantity: { type: Type.NUMBER },
-                unit: { type: Type.STRING }
-              }
-            }
-          }
-        }
+          type: Type.ARRAY,
+          items: {
+            type: Type.OBJECT,
+            properties: {
+              id: { type: Type.STRING },
+              code: { type: Type.STRING },
+              category: { type: Type.STRING },
+              description: { type: Type.STRING },
+              qty: { type: Type.NUMBER },
+              unit: { type: Type.STRING },
+              rate: { type: Type.NUMBER },
+              amount: { type: Type.NUMBER },
+            },
+            propertyOrdering: ["id", "code", "category", "description", "qty", "unit", "rate", "amount"],
+          },
+        },
       }
     });
 
-    return JSON.parse(result.text || '{}');
+    // Use result.text property directly.
+    return JSON.parse(result.text || '[]');
   } catch (error) {
-    // Demo Fallback for Seed Pitch
-    return {
-      isCodeReference: "IS 456:2000 (Reinforced Concrete)",
-      visualAudit: "Vertical reinforcement for Column C-12 matches BIM spacing requirements. Lapping length appears compliant (50d).",
-      progressPercentage: 42,
-      detectedAnomalies: ["Unsecured scaffolding on western face"],
-      boqUpdate: { item: "M25 Grade Concrete", quantity: 12.5, unit: "cum" }
-    };
+    // Demo Fallback with realistic synthesized data
+    return [
+      { id: 'ext-1', code: '2.1.1', category: 'Civil', description: 'Earthwork in excavation by mechanical means (Hydraulic excavator) over areas (exceeding 30cm in depth, 1.5m in width as well as 10sqm on plan)', qty: 1540, unit: 'cum', rate: 155.00, amount: 238700 },
+      { id: 'ext-2', code: '5.22', category: 'Civil', description: 'Steel reinforcement for R.C.C. work including straightening, cutting, bending, placing in position and binding all complete upto floor five level.', qty: 18.2, unit: 'mt', rate: 68000.00, amount: 1237600 },
+      { id: 'ext-3', code: '13.1.1', category: 'Finishing', description: '12mm cement plaster of mix 1:4 (1 cement: 4 fine sand)', qty: 850, unit: 'sqm', rate: 215.00, amount: 182750 }
+    ];
   }
 };
 
-export const analyzeSiteProgress = async (stage: string, mockImageData: string) => {
+export const analyzeSiteFrame = async (imageData: string, stage: ProjectStage, cameraName: string) => {
   try {
-    if (!process.env.API_KEY) throw new Error("Demo Mode Trigger");
-    const prompt = `Analyze construction progress for ${stage}. Mention volume removal (IS 1200) and site depth. Return JSON.`;
+    if (!process.env.API_KEY || process.env.API_KEY === 'demo_mode') throw new Error("Demo Mode");
+    const prompt = `Analyze this construction image for project stage ${stage} at ${cameraName}. Refer to IS 456 for concrete or IS 1786 for rebar.`;
+    
     const result = await ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
-        contents: prompt,
-        config: {
-            responseMimeType: "application/json",
-            responseSchema: {
-                type: Type.OBJECT,
-                properties: {
-                    progressPercentage: { type: Type.NUMBER },
-                    insights: { type: Type.ARRAY, items: { type: Type.STRING } },
-                    safetyAlerts: { type: Type.ARRAY, items: { type: Type.STRING } },
-                    estimatedCompletion: { type: Type.STRING }
-                }
-            }
-        }
+      model: 'gemini-2.5-flash-image',
+      contents: { 
+        parts: [
+          { text: prompt }, 
+          { inlineData: { mimeType: "image/jpeg", data: imageData.split(',')[1] } }
+        ] 
+      },
+      config: { responseMimeType: "application/json" }
     });
     return JSON.parse(result.text || '{}');
   } catch (error) {
-    return {
-      progressPercentage: 78,
-      insights: [`Verified: ${stage} aligns with BIM Spec v4.2`, "Material Density: 98% match"],
-      safetyAlerts: ["Minor: Personnel near machinery"],
-      estimatedCompletion: "2 Days ahead"
-    };
+    return { isCodeReference: "IS 456:2000", visualAudit: "Compliant", progressPercentage: 42 };
   }
 };
 
 export const getRegulatoryAdvice = async (query: string) => {
     try {
-        if (!process.env.API_KEY) throw new Error("Demo Mode");
+        if (!process.env.API_KEY || process.env.API_KEY === 'demo_mode') throw new Error("Demo Mode");
         const response = await ai.models.generateContent({
             model: 'gemini-3-flash-preview',
-            contents: `Expert on Indian Construction Codes (IS Codes). Answer briefly: "${query}"`,
+            contents: [{ text: `Expert on Indian Construction Codes (IS Codes). Answer briefly: "${query}"` }],
         });
         return response.text;
     } catch (error) {
@@ -108,80 +96,16 @@ export const getRegulatoryAdvice = async (query: string) => {
     }
 }
 
-// Added missing exported member auditInventoryInvoice
 export const auditInventoryInvoice = async (invoiceText: string, stockSummary: string) => {
   try {
-    if (!process.env.API_KEY) throw new Error("Demo Mode");
-    const prompt = `Audit this invoice against current stock. Invoice: ${invoiceText}. Stock: ${stockSummary}.`;
+    if (!process.env.API_KEY || process.env.API_KEY === 'demo_mode') throw new Error("Demo Mode");
     const result = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
-      contents: prompt,
-      config: {
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            discrepancies: { type: Type.BOOLEAN },
-            message: { type: Type.STRING },
-            detectedItems: {
-              type: Type.ARRAY,
-              items: {
-                type: Type.OBJECT,
-                properties: {
-                  name: { type: Type.STRING },
-                  quantity: { type: Type.NUMBER }
-                }
-              }
-            }
-          }
-        }
-      }
+      contents: [{ text: `Audit invoice: ${invoiceText}. Stock: ${stockSummary}.` }],
+      config: { responseMimeType: "application/json" }
     });
     return JSON.parse(result.text || '{}');
   } catch (error) {
-    return {
-      discrepancies: false,
-      message: "Invoice matched with delivery manifest. Quantity verified.",
-      detectedItems: [
-        { name: 'Cement Bags', quantity: 500 },
-        { name: 'TMT Bars', quantity: 2000 }
-      ]
-    };
+    return { discrepancies: false, message: "Verified", detectedItems: [] };
   }
 };
-
-export const generateProgressReportFromCamera = async (cameraName: string, stage: ProjectStage) => {
-    // Optimized for speed in grid view
-    return {
-        analysisSummary: `Visual Analysis: ${cameraName} feed indicates 80% completion of current task. Syncing with IS 1200 standards.`,
-        newMeasurement: { label: "Earthwork", value: "60", unit: "cum", delta: "+60" },
-        newTaskLog: {
-            id: `TASK-AI-${Date.now()}`,
-            taskName: "AI-Verified Site Clearance",
-            stage: stage,
-            startTime: new Date().toISOString(),
-            endTime: new Date(Date.now() + 5 * 60 * 60 * 1000).toISOString(),
-            durationHours: 5,
-            status: "COMPLETED",
-            verifiedBy: "Gemini Vision Engine",
-            totalCost: 15400,
-            materials: [{ name: "JCB Rental", quantity: 5, unit: "hrs", unitRate: 1200, totalCost: 6000 }]
-        }
-    };
-}
-
-export const generateHourlyLog = async (cameraName: string, hour: number) => {
-    const activities = [
-        { desc: "Active: JCB loading debris in Sector B.", objs: ["JCB", "Dump Truck"] },
-        { desc: "Critical: Rebar reinforcement for column C4 identified.", objs: ["Workers", "Rebar"] },
-        { desc: "Idle: No movement detected in Zone A.", objs: [] }
-    ];
-    return activities[Math.floor(Math.random() * activities.length)];
-}
-
-export const generateDailySummary = async (logs: AiLogEntry[]) => {
-    return {
-        summary: `Site active for ${logs.length} hours. Majority of movement detected in Excavation Zone. High efficiency recorded.`,
-        efficiency: 92
-    };
-}
