@@ -37,6 +37,11 @@ const App: React.FC = () => {
   const [isMultiCameraModalOpen, setIsMultiCameraModalOpen] = useState(false);
   const [uploadedBimName, setUploadedBimName] = useState<string | null>(null);
 
+  const [layers, setLayers] = useState<LayerVisibility>({
+    structural: true, pipes: false, electrical: false, interiors: false, facade: false,
+    excavationRed: true, excavationGreen: true, excavationBlue: true, bimSlice: false,
+  });
+
   // Theme Logic
   useEffect(() => {
     const html = document.documentElement;
@@ -45,11 +50,6 @@ const App: React.FC = () => {
   }, [isDark]);
 
   const toggleTheme = () => setIsDark(!isDark);
-
-  const [layers, setLayers] = useState<LayerVisibility>({
-    structural: true, pipes: false, electrical: false, interiors: false, facade: false,
-    excavationRed: true, excavationGreen: true, excavationBlue: true, bimSlice: false,
-  });
 
   const handleLoginSuccess = useCallback(async (user: any) => {
     if (!user) return;
@@ -95,7 +95,14 @@ const App: React.FC = () => {
     if (result.success) {
       const projects = await fetchUserProjects(authState.user.id);
       setUserProjects(projects);
-      setActiveProject(projects[projects.length - 1]);
+      const newProject = projects[projects.length - 1];
+      setActiveProject(newProject);
+      
+      // Apply template defaults if present
+      if (projectData.defaultLayers) {
+        setLayers(prev => ({ ...prev, ...projectData.defaultLayers }));
+      }
+
       setAuthState(prev => ({ ...prev, isSubscribed: true }));
       setView('monitoring-app');
       setShowProjectCreation(false);

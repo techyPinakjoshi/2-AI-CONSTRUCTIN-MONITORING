@@ -1,6 +1,7 @@
 
 import React, { useState } from 'react';
-import { X, Building2, Users, Mail, Plus, CheckCircle2, Crown, Zap } from 'lucide-react';
+import { X, Building2, Users, Mail, Plus, CheckCircle2, Crown, Zap, Home, Building, Factory } from 'lucide-react';
+import { PROJECT_TEMPLATES } from '../constants';
 
 interface ProjectCreationModalProps {
   onClose: () => void;
@@ -9,6 +10,7 @@ interface ProjectCreationModalProps {
 
 const ProjectCreationModal: React.FC<ProjectCreationModalProps> = ({ onClose, onCreate }) => {
   const [name, setName] = useState('');
+  const [selectedTemplate, setSelectedTemplate] = useState(PROJECT_TEMPLATES[0].id);
   const [teamEmail, setTeamEmail] = useState('');
   const [teamMembers, setTeamMembers] = useState<string[]>([]);
   const [isCreating, setIsCreating] = useState(false);
@@ -27,9 +29,24 @@ const ProjectCreationModal: React.FC<ProjectCreationModalProps> = ({ onClose, on
   const handleCreate = async () => {
     if (!name) return;
     setIsCreating(true);
+    const template = PROJECT_TEMPLATES.find(t => t.id === selectedTemplate);
     // Simulate setup
     await new Promise(r => setTimeout(r, 2000));
-    onCreate({ name, teamMembers });
+    onCreate({ 
+      name, 
+      template: selectedTemplate,
+      defaultLayers: template?.defaultLayers,
+      teamMembers 
+    });
+  };
+
+  const renderIcon = (iconName: string) => {
+    switch (iconName) {
+      case 'Home': return <Home size={18} />;
+      case 'Building': return <Building size={18} />;
+      case 'Factory': return <Factory size={18} />;
+      default: return <Building2 size={18} />;
+    }
   };
 
   return (
@@ -52,7 +69,7 @@ const ProjectCreationModal: React.FC<ProjectCreationModalProps> = ({ onClose, on
           </button>
         </div>
 
-        <div className="p-8 space-y-8">
+        <div className="p-8 space-y-6 overflow-y-auto max-h-[70vh] scrollbar-hide">
           <div className="space-y-3">
             <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-1">Project Identifier</label>
             <div className="relative">
@@ -67,8 +84,37 @@ const ProjectCreationModal: React.FC<ProjectCreationModalProps> = ({ onClose, on
             </div>
           </div>
 
+          <div className="space-y-3">
+            <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-1">Project Template</label>
+            <div className="grid grid-cols-1 gap-2">
+              {PROJECT_TEMPLATES.map((tpl) => (
+                <button
+                  key={tpl.id}
+                  onClick={() => setSelectedTemplate(tpl.id)}
+                  className={`flex items-start gap-4 p-4 rounded-2xl border transition-all text-left ${
+                    selectedTemplate === tpl.id 
+                    ? 'bg-blue-600/10 border-blue-500/50 ring-1 ring-blue-500/30' 
+                    : 'bg-slate-950 border-slate-800 hover:border-slate-700'
+                  }`}
+                >
+                  <div className={`p-3 rounded-xl ${selectedTemplate === tpl.id ? 'bg-blue-600 text-white' : 'bg-slate-800 text-slate-400'}`}>
+                    {renderIcon(tpl.icon)}
+                  </div>
+                  <div className="flex-1">
+                    <h4 className={`text-xs font-black uppercase tracking-tight ${selectedTemplate === tpl.id ? 'text-blue-400' : 'text-white'}`}>
+                      {tpl.name}
+                    </h4>
+                    <p className="text-[10px] text-slate-500 font-medium leading-relaxed mt-1">
+                      {tpl.description}
+                    </p>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+
           <div className="space-y-4">
-            <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-1">Collaborative Workforce (Team Members)</label>
+            <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-1">Collaborative Workforce</label>
             <div className="flex gap-2">
               <div className="relative flex-1">
                 <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={18}/>
@@ -96,11 +142,11 @@ const ProjectCreationModal: React.FC<ProjectCreationModalProps> = ({ onClose, on
                   <button onClick={() => removeMember(email)} className="hover:text-red-400"><X size={12} /></button>
                 </div>
               ))}
-              {teamMembers.length === 0 && <span className="text-[10px] text-slate-600 italic">No members added yet. Teams share access to live monitoring.</span>}
+              {teamMembers.length === 0 && <span className="text-[10px] text-slate-600 italic">Invite teams to share live monitoring.</span>}
             </div>
           </div>
 
-          <div className="pt-4">
+          <div className="pt-4 sticky bottom-0 bg-slate-900 pb-2">
             <button 
               onClick={handleCreate}
               disabled={isCreating || !name}

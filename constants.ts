@@ -1,4 +1,5 @@
-import { InventoryItem, ProjectStage, CameraFeed, TaskLog, TourLocation, TourSession } from './types';
+
+import { InventoryItem, ProjectStage, CameraFeed, TaskLog, TourLocation, TourSession, ProjectTemplate } from './types';
 
 export const INITIAL_INVENTORY: InventoryItem[] = [
   { id: '1', name: 'Cement Bags (50kg)', quantity: 450, unit: 'bags', minThreshold: 100, lastUpdated: '2023-10-26 09:00' },
@@ -16,6 +17,33 @@ export const STAGES: ProjectStage[] = [
   ProjectStage.FACADE,
 ];
 
+export const PROJECT_TEMPLATES: ProjectTemplate[] = [
+  {
+    id: 'residential',
+    name: 'Residential High-Rise',
+    description: 'Optimized for housing projects with heavy emphasis on structural columns and interior MEP layers.',
+    icon: 'Home',
+    defaultLayers: { structural: true, electrical: true, pipes: true, interiors: true },
+    recommendedStages: [ProjectStage.STRUCTURAL, ProjectStage.MEP, ProjectStage.FACADE]
+  },
+  {
+    id: 'commercial',
+    name: 'Commercial Complex',
+    description: 'Designed for offices and malls with complex facade monitoring and extensive structural grids.',
+    icon: 'Building',
+    defaultLayers: { structural: true, facade: true, electrical: true, bimSlice: true },
+    recommendedStages: [ProjectStage.EXCAVATION, ProjectStage.STRUCTURAL, ProjectStage.FACADE]
+  },
+  {
+    id: 'industrial',
+    name: 'Industrial Plant',
+    description: 'Focused on site survey, massive excavation tracking, and large-scale structural assembly.',
+    icon: 'Factory',
+    defaultLayers: { structural: true, pipes: true, excavationBlue: true, excavationGreen: true },
+    recommendedStages: [ProjectStage.SURVEY, ProjectStage.EXCAVATION, ProjectStage.FOUNDATION]
+  }
+];
+
 export const MOCK_CAMERAS: CameraFeed[] = [
   { 
     id: 'CAM-01', 
@@ -26,7 +54,6 @@ export const MOCK_CAMERAS: CameraFeed[] = [
     lastSync: 'Live',
     activeZones: ['Structural Columns', 'Slab Casting'],
     streamType: 'YOUTUBE',
-    // Using a construction time-lapse/live example from YouTube
     streamUrl: 'https://www.youtube.com/embed/86YLFOog4GM?autoplay=1&mute=1&controls=0&loop=1&playlist=86YLFOog4GM'
   },
   { 
@@ -38,7 +65,6 @@ export const MOCK_CAMERAS: CameraFeed[] = [
     lastSync: 'Live',
     activeZones: ['Soil Removal', 'Retaining Wall'],
     streamType: 'DIRECT',
-    // Using a reliable stock video link for direct playback
     streamUrl: 'https://cdn.coverr.co/videos/coverr-construction-site-with-cranes-2646/1080p.mp4'
   },
   { 
@@ -118,7 +144,7 @@ export const TOUR_LOCATIONS: Record<string, TourLocation> = {
     'LOC-A': {
         id: 'LOC-A',
         name: 'Main Lobby Entry',
-        imageUrl: 'https://images.unsplash.com/photo-1590059390048-c8a77d7045c7?q=80&w=2608&auto=format&fit=crop', // Construction Interior
+        imageUrl: 'https://images.unsplash.com/photo-1590059390048-c8a77d7045c7?q=80&w=2608&auto=format&fit=crop',
         links: [
             { targetId: 'LOC-B', label: 'Move to Corridor', x: 70, y: 60 },
             { targetId: 'LOC-C', label: 'Exit to Site', x: 20, y: 55 }
@@ -127,7 +153,7 @@ export const TOUR_LOCATIONS: Record<string, TourLocation> = {
     'LOC-B': {
         id: 'LOC-B',
         name: 'Service Corridor L1',
-        imageUrl: 'https://images.unsplash.com/photo-1503387762-592deb58ef4e?q=80&w=1931&auto=format&fit=crop', // Concrete hallway
+        imageUrl: 'https://images.unsplash.com/photo-1503387762-592deb58ef4e?q=80&w=1931&auto=format&fit=crop',
         links: [
             { targetId: 'LOC-A', label: 'Return to Lobby', x: 40, y: 70 },
             { targetId: 'LOC-D', label: 'Inspect MEP Room', x: 80, y: 50 }
@@ -136,7 +162,7 @@ export const TOUR_LOCATIONS: Record<string, TourLocation> = {
     'LOC-C': {
         id: 'LOC-C',
         name: 'Exterior Perimeter',
-        imageUrl: 'https://images.unsplash.com/photo-1541888946425-d81bb19240f5?q=80&w=2070&auto=format&fit=crop', // Outdoor construction
+        imageUrl: 'https://images.unsplash.com/photo-1541888946425-d81bb19240f5?q=80&w=2070&auto=format&fit=crop',
         links: [
             { targetId: 'LOC-A', label: 'Enter Building', x: 50, y: 65 }
         ]
@@ -144,7 +170,7 @@ export const TOUR_LOCATIONS: Record<string, TourLocation> = {
     'LOC-D': {
         id: 'LOC-D',
         name: 'MEP Control Room',
-        imageUrl: 'https://images.unsplash.com/photo-1621905252507-b35492cc74b4?q=80&w=2669&auto=format&fit=crop', // Industrial room
+        imageUrl: 'https://images.unsplash.com/photo-1621905252507-b35492cc74b4?q=80&w=2669&auto=format&fit=crop',
         links: [
             { targetId: 'LOC-B', label: 'Back to Corridor', x: 30, y: 70 }
         ]

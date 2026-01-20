@@ -3,9 +3,10 @@ import React, { useState, useRef, useEffect, useContext } from 'react';
 import { 
   Send, Zap, Bot, User, MessageSquare, 
   Calculator, Layout, Video, Sun, Moon,
-  ArrowRight, ShieldCheck, Sparkles, Globe
+  ArrowRight, ShieldCheck, Sparkles, Globe,
+  Box, UploadCloud, Loader2, CheckCircle, Save, X
 } from 'lucide-react';
-import { getRegulatoryAdvice } from '../services/geminiService';
+import { getRegulatoryAdvice, reconstructBimFromPlans } from '../services/geminiService';
 import { ThemeContext } from '../App';
 
 interface Message { role: 'user' | 'assistant'; content: string; }
@@ -17,6 +18,7 @@ const LandingChat: React.FC<any> = ({ onAuthRequired, onEnterApp, onOpenBoqDashb
   ]);
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
+  const [showBimGenerator, setShowBimGenerator] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -41,7 +43,7 @@ const LandingChat: React.FC<any> = ({ onAuthRequired, onEnterApp, onOpenBoqDashb
   };
 
   return (
-    <div className="flex h-screen bg-zinc-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 overflow-hidden font-sans transition-colors duration-500">
+    <div className="flex h-screen bg-transparent text-slate-900 dark:text-slate-100 overflow-hidden font-sans">
       {/* Sidebar - Professional Width */}
       <aside className="hidden lg:flex w-72 bg-white/40 dark:bg-slate-900/40 backdrop-blur-2xl border-r border-zinc-200 dark:border-white/5 flex-col p-6 overflow-y-auto scrollbar-hide">
         <div className="flex items-center justify-between mb-10">
@@ -63,6 +65,7 @@ const LandingChat: React.FC<any> = ({ onAuthRequired, onEnterApp, onOpenBoqDashb
             </h3>
             <div className="grid grid-cols-1 gap-2">
               <ServiceItem icon={<MessageSquare size={16}/>} title="IS Specialist AI" color="text-cyan-500" onClick={() => {}} />
+              <ServiceItem icon={<Box size={16}/>} title="2D to BIM Model" color="text-purple-500" onClick={() => setShowBimGenerator(true)} />
               <ServiceItem icon={<Calculator size={16}/>} title="BOQ Extraction" color="text-orange-500" onClick={onOpenBoqDashboard} />
               <ServiceItem icon={<Layout size={16}/>} title="Site Dashboard" color="text-emerald-500" onClick={onEnterApp} />
               <ServiceItem icon={<Video size={16}/>} title="AI Monitoring" color="text-blue-500" onClick={onEnterApp} />
@@ -70,7 +73,7 @@ const LandingChat: React.FC<any> = ({ onAuthRequired, onEnterApp, onOpenBoqDashb
           </section>
 
           {!user && (
-            <section className="bg-cyan-500/5 p-5 rounded-2xl border border-cyan-500/10">
+            <section className="bg-cyan-500/5 p-5 rounded-2xl border border-cyan-500/10 backdrop-blur-md">
               <p className="text-xs text-slate-500 dark:text-slate-400 mb-4 leading-tight uppercase font-bold tracking-tight">Login required for live monitoring access.</p>
               <button onClick={onAuthRequired} className="w-full bg-cyan-600 hover:bg-cyan-500 text-white rounded-xl py-3 text-xs font-black uppercase tracking-widest transition-all">
                 Sign In
@@ -80,13 +83,13 @@ const LandingChat: React.FC<any> = ({ onAuthRequired, onEnterApp, onOpenBoqDashb
         </div>
       </aside>
 
-      <main className="flex-1 flex flex-col relative grid-bg overflow-y-auto scrollbar-hide">
+      <main className="flex-1 flex flex-col relative overflow-y-auto scrollbar-hide">
         <div className="flex-1 flex flex-col items-center">
           <div className="w-full max-w-4xl px-8 py-10 flex flex-col items-center">
             
             {/* Professional Header */}
             <div className="text-center mb-8">
-              <div className="inline-flex items-center gap-2 px-4 py-1.5 bg-cyan-500/10 border border-cyan-500/20 rounded-full mb-4">
+              <div className="inline-flex items-center gap-2 px-4 py-1.5 bg-cyan-500/10 border border-cyan-500/20 rounded-full mb-4 backdrop-blur-md">
                 <Sparkles size={12} className="text-cyan-600 dark:text-cyan-400" />
                 <span className="text-[10px] font-black uppercase tracking-widest">Operational v4.0 Active</span>
               </div>
@@ -98,8 +101,8 @@ const LandingChat: React.FC<any> = ({ onAuthRequired, onEnterApp, onOpenBoqDashb
               </p>
             </div>
 
-            {/* Chat Area - ULTRA COMPACT (Fixed Height: 180px) */}
-            <div className="w-full max-w-xl bg-white/70 dark:bg-slate-900/60 rounded-[2rem] p-3 shadow-2xl border border-zinc-200 dark:border-white/5 mb-8 flex flex-col h-[180px] transition-all">
+            {/* Chat Area - ULTRA COMPACT */}
+            <div className="w-full max-w-xl bg-white/70 dark:bg-slate-900/60 rounded-[2rem] p-3 shadow-2xl border border-zinc-200 dark:border-white/5 mb-8 flex flex-col h-[180px] transition-all backdrop-blur-xl">
               <div className="flex-1 space-y-2 overflow-y-auto mb-1 pr-2 scrollbar-hide">
                 {messages.map((m, i) => (
                   <div key={i} className={`flex gap-3 animate-in fade-in slide-in-from-bottom-1 duration-300 ${m.role === 'assistant' ? 'items-start' : 'items-start flex-row-reverse'}`}>
@@ -121,13 +124,13 @@ const LandingChat: React.FC<any> = ({ onAuthRequired, onEnterApp, onOpenBoqDashb
                 <div ref={chatEndRef} />
               </div>
 
-              {/* Tighter Input Section - No margin above */}
+              {/* Tighter Input Section */}
               <form onSubmit={handleSend} className="relative pt-2">
                 <input 
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
                   placeholder="Ask IS Code 456 queries..."
-                  className="w-full bg-zinc-100 dark:bg-black/40 border border-zinc-200 dark:border-white/10 rounded-xl px-5 py-3 pr-14 text-sm text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-cyan-500/30 transition-all shadow-inner"
+                  className="w-full bg-zinc-100/50 dark:bg-black/40 border border-zinc-200 dark:border-white/10 rounded-xl px-5 py-3 pr-14 text-sm text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-cyan-500/30 transition-all shadow-inner backdrop-blur-md"
                 />
                 <button type="submit" className="absolute right-1.5 top-[18px] p-2 bg-cyan-600 hover:bg-cyan-500 text-white rounded-lg transition-all active:scale-90 shadow-lg">
                   <Send size={16}/>
@@ -135,7 +138,7 @@ const LandingChat: React.FC<any> = ({ onAuthRequired, onEnterApp, onOpenBoqDashb
               </form>
             </div>
 
-            {/* Quick Actions - Modern Bento Grid */}
+            {/* Quick Actions */}
             <div className="w-full max-w-2xl grid grid-cols-1 md:grid-cols-2 gap-6">
               <ActionCard 
                 icon={<Calculator size={20}/>} 
@@ -155,14 +158,155 @@ const LandingChat: React.FC<any> = ({ onAuthRequired, onEnterApp, onOpenBoqDashb
           </div>
         </div>
       </main>
+      
+      {showBimGenerator && (
+        <BimGeneratorModal onClose={() => setShowBimGenerator(false)} />
+      )}
+      
       {children}
     </div>
   );
 };
 
+const BimGeneratorModal = ({ onClose }: { onClose: () => void }) => {
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [result, setResult] = useState<any>(null);
+  const [files, setFiles] = useState<string[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleReconstruct = async () => {
+    if (files.length === 0) return;
+    setIsGenerating(true);
+    try {
+      const data = await reconstructBimFromPlans(files);
+      setResult(data);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  const handleSaveModel = () => {
+    // Logic to save model to user profile / database
+    alert("BIM Model saved successfully to your Digital Twin library.");
+    onClose();
+  };
+
+  return (
+    <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/70 backdrop-blur-xl p-6 animate-in fade-in duration-300">
+      <div className="bg-slate-900 border border-slate-700 w-full max-w-2xl rounded-[3rem] overflow-hidden shadow-2xl flex flex-col">
+        <header className="p-8 border-b border-slate-800 flex justify-between items-center bg-gradient-to-r from-purple-950/20 to-slate-900">
+          <div className="flex items-center gap-4">
+            <div className="p-3 bg-purple-600 rounded-2xl shadow-xl shadow-purple-600/20">
+              <Box className="text-white" size={24} />
+            </div>
+            <div>
+              <h3 className="text-xl font-black text-white uppercase italic tracking-tight">AI BIM Reconstruction</h3>
+              <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-1">2D CAD to 3D Digital Twin (Gemini 3 Pro)</p>
+            </div>
+          </div>
+          <button onClick={onClose} className="p-3 text-slate-500 hover:text-white transition-colors"><X size={24}/></button>
+        </header>
+
+        <div className="p-10 flex-1 overflow-y-auto max-h-[70vh] scrollbar-hide">
+          {!result ? (
+            <div className="space-y-8">
+              <div 
+                onClick={() => fileInputRef.current?.click()}
+                className="group border-4 border-dashed border-slate-800 rounded-[2.5rem] p-16 text-center hover:border-purple-500/40 hover:bg-purple-500/5 transition-all cursor-pointer"
+              >
+                <UploadCloud className="mx-auto text-slate-700 group-hover:text-purple-500 transition-colors mb-4" size={48} />
+                <p className="text-sm font-black text-slate-400 uppercase tracking-widest">Stage Architectural & Structural Plans</p>
+                <input 
+                  type="file" 
+                  multiple 
+                  ref={fileInputRef} 
+                  className="hidden" 
+                  // Fix: Casting to any to avoid "name" property missing on type unknown
+                  onChange={(e) => e.target.files && setFiles(Array.from(e.target.files).map((f: any) => f.name))} 
+                />
+              </div>
+
+              {files.length > 0 && (
+                <div className="bg-slate-950/50 p-6 rounded-3xl border border-slate-800">
+                  <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-4">Files Ready for Analysis ({files.length})</h4>
+                  <div className="space-y-2">
+                    {files.map((f, i) => (
+                      <div key={i} className="flex items-center gap-3 text-xs text-slate-300 bg-slate-900 p-3 rounded-xl border border-slate-800">
+                        <CheckCircle size={14} className="text-purple-500" /> {f}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <button 
+                onClick={handleReconstruct}
+                disabled={files.length === 0 || isGenerating}
+                className="w-full bg-purple-600 hover:bg-purple-500 text-white py-5 rounded-2xl font-black uppercase tracking-widest shadow-xl shadow-purple-600/20 flex items-center justify-center gap-3 transition-all active:scale-95 disabled:opacity-50"
+              >
+                {isGenerating ? <Loader2 className="animate-spin" size={20} /> : <Zap size={20} />}
+                {isGenerating ? "Synthesizing 3D Elements..." : "Build BIM Model"}
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-6 animate-in slide-in-from-bottom-4 duration-500">
+              <div className="bg-emerald-500/10 border border-emerald-500/20 p-8 rounded-[2.5rem] flex items-center justify-between">
+                <div>
+                  <h4 className="text-emerald-500 font-black uppercase tracking-tight italic text-lg">Reconstruction Success</h4>
+                  <p className="text-xs text-slate-400 mt-1">Generated {(result.elements as any[]).length} components across {result.levels} levels.</p>
+                </div>
+                <div className="p-4 bg-emerald-500 rounded-3xl shadow-xl shadow-emerald-500/20 text-white">
+                  <CheckCircle size={24} />
+                </div>
+              </div>
+
+              <div className="bg-slate-950/50 rounded-[2.5rem] border border-slate-800 overflow-hidden">
+                <div className="p-6 bg-slate-900/50 border-b border-slate-800 flex justify-between items-center">
+                   <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Model Schema Preview</span>
+                   {result.isCodeCompliant && (
+                     <span className="px-3 py-1 bg-cyan-500/10 text-cyan-500 text-[10px] font-black rounded-full border border-cyan-500/20">IS 456 COMPLIANT</span>
+                   )}
+                </div>
+                <div className="p-8 space-y-4">
+                  {(result.elements as any[]).map((el: any, i: number) => (
+                    <div key={i} className="flex items-center justify-between py-3 border-b border-slate-900 last:border-0">
+                      <div className="flex items-center gap-3">
+                        <div className="w-2 h-2 rounded-full bg-purple-500"></div>
+                        <span className="text-xs font-bold text-slate-200">{el.type}</span>
+                      </div>
+                      <span className="text-[10px] font-mono text-slate-500 bg-slate-900 px-2 py-1 rounded-md">{el.dimensions}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex gap-4">
+                <button 
+                  onClick={() => setResult(null)}
+                  className="flex-1 py-5 border border-slate-700 text-slate-400 rounded-2xl font-black uppercase text-xs tracking-widest hover:bg-slate-800 transition-all"
+                >
+                  Start Over
+                </button>
+                <button 
+                  onClick={handleSaveModel}
+                  className="flex-[2] bg-cyan-600 hover:bg-cyan-500 text-white py-5 rounded-2xl font-black uppercase tracking-widest shadow-xl shadow-cyan-600/20 flex items-center justify-center gap-3 transition-all"
+                >
+                  <Save size={18} /> Save to Digital Twin
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const ServiceItem = ({ icon, title, color, onClick }: any) => (
-  <button onClick={onClick} className="w-full flex items-center gap-4 p-3.5 rounded-2xl hover:bg-zinc-200 dark:hover:bg-white/5 transition-all group text-left">
-    <div className={`p-2 rounded-xl bg-zinc-100 dark:bg-slate-800 ${color} group-hover:scale-110 transition-transform`}>{icon}</div>
+  <button onClick={onClick} className="w-full flex items-center gap-4 p-3.5 rounded-2xl hover:bg-zinc-200/50 dark:hover:bg-white/5 transition-all group text-left">
+    <div className={`p-2 rounded-xl bg-zinc-100 dark:bg-slate-800 ${color} group-hover:scale-110 transition-transform shadow-sm`}>{icon}</div>
     <span className="text-xs font-black uppercase tracking-tight text-slate-600 dark:text-slate-400 group-hover:text-slate-900 dark:group-hover:text-white">{title}</span>
   </button>
 );
@@ -173,7 +317,7 @@ const ActionCard = ({ icon, title, desc, color, onClick }: any) => {
     emerald: "bg-emerald-500/10 text-emerald-600 border-emerald-500/20"
   };
   return (
-    <button onClick={onClick} className="flex flex-col p-6 rounded-[2.5rem] bg-white dark:bg-slate-900/40 border border-zinc-200 dark:border-white/5 text-left hover:scale-[1.02] transition-all group shadow-xl">
+    <button onClick={onClick} className="flex flex-col p-6 rounded-[2.5rem] bg-white/60 dark:bg-slate-900/40 backdrop-blur-xl border border-zinc-200 dark:border-white/5 text-left hover:scale-[1.02] transition-all group shadow-xl">
       <div className={`p-3 rounded-2xl w-fit mb-4 ${styles[color as keyof typeof styles]}`}>{icon}</div>
       <h4 className="text-base font-black text-slate-900 dark:text-white uppercase italic tracking-tight group-hover:text-cyan-500 transition-colors">{title}</h4>
       <p className="text-sm text-slate-500 dark:text-slate-400 leading-relaxed font-medium mt-2">{desc}</p>

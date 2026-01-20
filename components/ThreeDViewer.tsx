@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef, memo } from 'react';
 import { LayerVisibility, ProjectStage, CameraFeed, ViewMode, TourSession, AiDetection } from '../types';
-import { Maximize, Minimize, Layers, RefreshCw, Scan, Box, MapPin } from 'lucide-react';
+import { Maximize, Minimize, Layers, RefreshCw, Scan, Box, MapPin, ShieldCheck, AlertTriangle } from 'lucide-react';
 import { TOUR_LOCATIONS } from '../constants';
 import { analyzeSiteFrame } from '../services/geminiService';
 
@@ -41,6 +41,7 @@ const ThreeDViewer: React.FC<ThreeDViewerProps> = ({
   const [isMaximized, setIsMaximized] = useState(false);
   const [detections, setDetections] = useState<AiDetection[]>([]);
   const [splitPosition, setSplitPosition] = useState(50);
+  const [complianceStatus, setComplianceStatus] = useState<'VERIFIED' | 'MONITORING' | 'ALERT'>('MONITORING');
   
   const intervalRef = useRef<number | null>(null);
 
@@ -54,13 +55,15 @@ const ThreeDViewer: React.FC<ThreeDViewerProps> = ({
     if (intervalRef.current) window.clearInterval(intervalRef.current);
 
     if (activeCamera) {
+      setComplianceStatus('MONITORING');
       intervalRef.current = window.setInterval(() => {
-        // Static mock data to keep the JS thread idle as much as possible
         setDetections([
           { id: 'd1', label: 'Excavator', status: 'WORKING', confidence: 0.98, x: 42, y: 51, width: 18, height: 14 },
           { id: 'd2', label: 'Personnel', status: 'MOVING', confidence: 0.92, x: 25, y: 72, width: 4, height: 10 }
         ]);
-      }, 5000); // 5 seconds interval for minimal thread usage
+        // Occasionally simulate a verification success
+        setComplianceStatus(prev => prev === 'MONITORING' ? 'VERIFIED' : 'MONITORING');
+      }, 5000);
     } else {
       setDetections([]);
     }
@@ -75,8 +78,10 @@ const ThreeDViewer: React.FC<ThreeDViewerProps> = ({
     setIsAnalyzing(true);
     try {
       await analyzeSiteFrame("data:image/jpeg;base64,...", stage, activeCamera.name);
+      setComplianceStatus('VERIFIED');
     } catch (e) {
       console.error(e);
+      setComplianceStatus('ALERT');
     } finally {
       setIsAnalyzing(false);
     }
@@ -85,8 +90,9 @@ const ThreeDViewer: React.FC<ThreeDViewerProps> = ({
   return (
     <div className={`${isMaximized ? "fixed inset-0 z-[100] bg-slate-950" : "relative w-full h-full bg-slate-900 rounded-xl overflow-hidden border border-slate-800"}`}>
       
+      {/* HUD - Top Left */}
       <div className="absolute top-3 left-3 z-30 flex gap-2 pointer-events-none">
-        <div className="bg-slate-900/90 px-3 py-1.5 rounded-lg border border-slate-700 text-slate-300 flex items-center gap-3">
+        <div className="bg-slate-900/90 px-3 py-1.5 rounded-lg border border-slate-700 text-slate-300 flex items-center gap-3 shadow-2xl">
           {activeCamera ? (
             <div className="flex items-center gap-2">
               <div className="w-1.5 h-1.5 bg-red-500 rounded-full animate-pulse"></div>
@@ -96,17 +102,32 @@ const ThreeDViewer: React.FC<ThreeDViewerProps> = ({
             <span className="text-[9px] font-mono font-bold uppercase tracking-widest">{viewMode} VIEW</span>
           )}
         </div>
+
+        {activeCamera && (
+            <div className={`px-3 py-1.5 rounded-lg border flex items-center gap-2 transition-all duration-500 shadow-2xl backdrop-blur-md ${
+                complianceStatus === 'VERIFIED' ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-400' : 
+                complianceStatus === 'ALERT' ? 'bg-red-500/20 border-red-500/40 text-red-400' :
+                'bg-blue-500/20 border-blue-500/40 text-blue-400'
+            }`}>
+                {complianceStatus === 'VERIFIED' ? <ShieldCheck size={12} /> : 
+                 complianceStatus === 'ALERT' ? <AlertTriangle size={12} className="animate-bounce" /> : 
+                 <RefreshCw size={12} className="animate-spin" />}
+                <span className="text-[9px] font-black uppercase tracking-widest">
+                    IS Code Guard: {complianceStatus}
+                </span>
+            </div>
+        )}
       </div>
       
       <div className="absolute top-3 right-3 z-30 flex flex-col gap-2">
-        <button onClick={() => setIsMaximized(!isMaximized)} className="p-2 bg-slate-900/90 text-slate-400 hover:text-cyan-400 rounded-lg border border-slate-700">
+        <button onClick={() => setIsMaximized(!isMaximized)} className="p-2 bg-slate-900/90 text-slate-400 hover:text-cyan-400 rounded-lg border border-slate-700 backdrop-blur-md">
           {isMaximized ? <Minimize size={18} /> : <Maximize size={18} />}
         </button>
         {activeCamera && (
           <button 
             onClick={handleAnalyzeStream} 
             disabled={isAnalyzing}
-            className={`p-2 rounded-lg border transition-colors ${isAnalyzing ? 'bg-orange-600' : 'bg-slate-900 text-orange-400 border-slate-700'}`}
+            className={`p-2 rounded-lg border transition-colors backdrop-blur-md ${isAnalyzing ? 'bg-orange-600' : 'bg-slate-900 text-orange-400 border-slate-700'}`}
           >
             {isAnalyzing ? <RefreshCw size={18} className="animate-spin" /> : <Scan size={18} />}
           </button>
@@ -144,7 +165,7 @@ const ThreeDViewer: React.FC<ThreeDViewerProps> = ({
                 {activeCamera.streamType === 'YOUTUBE' ? (
                   <iframe 
                     src={activeCamera.streamUrl} 
-                    className="w-full h-full pointer-events-none" 
+                    className="w-full h-full pointer-events-none scale-105" 
                     allow="autoplay; encrypted-media" 
                   />
                 ) : (

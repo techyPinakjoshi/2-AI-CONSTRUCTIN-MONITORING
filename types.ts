@@ -125,3 +125,12 @@ export interface TourSession {
     duration: string;
     steps: TourStep[];
 }
+
+export interface ProjectTemplate {
+  id: string;
+  name: string;
+  description: string;
+  icon: string;
+  defaultLayers: Partial<LayerVisibility>;
+  recommendedStages: ProjectStage[];
+}

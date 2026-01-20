@@ -18,13 +18,20 @@ const AuthModal: React.FC<AuthModalProps> = ({ onClose, onLogin }) => {
     setIsConnecting(true);
     setErrorMsg(null);
     try {
+      // For construction monitoring sites, we use the standard redirect flow
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: window.location.origin
+          redirectTo: window.location.origin,
+          queryParams: {
+            access_type: 'offline',
+            prompt: 'select_account',
+          },
         }
       });
       if (error) throw error;
+      // The page will redirect to Google. 
+      // After returning, App.tsx's onAuthStateChange will pick up the session.
     } catch (err: any) {
       setErrorMsg(err.message || "Google authentication failed");
       setIsConnecting(false);
@@ -84,12 +91,6 @@ const AuthModal: React.FC<AuthModalProps> = ({ onClose, onLogin }) => {
                 <AlertCircle size={16} className="shrink-0 mt-0.5" />
                 <span className="text-[11px] font-bold leading-tight">{errorMsg}</span>
               </div>
-              <button 
-                onClick={onClose}
-                className="w-full py-2 bg-red-500/20 hover:bg-red-500/30 text-red-600 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all"
-              >
-                Return to Home
-              </button>
             </div>
           )}
 

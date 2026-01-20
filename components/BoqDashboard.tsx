@@ -1,11 +1,11 @@
 
-import React, { useState, useContext, useRef } from 'react';
+import React, { useState, useContext, useRef, useEffect } from 'react';
 import { 
   BarChart3, TrendingUp, Download, Share2, Filter, 
   X, Calculator, ShieldCheck, Crown, FileText, Calendar, 
   IndianRupee, CheckCircle2, Clock, Sun, Moon, UploadCloud,
   FileUp, Trash2, Loader2, Sparkles, LayoutDashboard, ArrowRight,
-  Plus
+  Plus, Check, AlertCircle
 } from 'lucide-react';
 import { ThemeContext } from '../App';
 import { extractBoqFromPlans } from '../services/geminiService';
@@ -21,10 +21,16 @@ interface BoqItem {
   category: string;
 }
 
+interface FileUploadProgress {
+  file: File;
+  progress: number;
+  status: 'uploading' | 'completed' | 'error';
+}
+
 const BoqDashboard: React.FC<any> = ({ onClose, onUpgrade }) => {
   const { isDark, toggleTheme } = useContext(ThemeContext);
   const [activeTab, setActiveTab] = useState<'overview' | 'sor' | 'upload'>('upload');
-  const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
+  const [uploadQueue, setUploadQueue] = useState<FileUploadProgress[]>([]);
   const [extractedBoq, setExtractedBoq] = useState<BoqItem[]>([]);
   const [isExtracting, setIsExtracting] = useState(false);
   const [showProgressLink, setShowProgressLink] = useState(false);
@@ -33,19 +39,52 @@ const BoqDashboard: React.FC<any> = ({ onClose, onUpgrade }) => {
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
       const newFiles = Array.from(e.target.files);
-      setUploadedFiles(prev => [...prev, ...newFiles]);
+      
+      // Fix: Explicitly type the mapped array to match FileUploadProgress[]
+      const newUploads: FileUploadProgress[] = newFiles.map((file: File) => ({
+        file,
+        progress: 0,
+        status: 'uploading'
+      }));
+
+      setUploadQueue(prev => [...prev, ...newUploads]);
+
+      // Simulate individual file upload progress like Gmail
+      newUploads.forEach((upload) => {
+        let currentProgress = 0;
+        const interval = setInterval(() => {
+          currentProgress += Math.floor(Math.random() * 15) + 5;
+          if (currentProgress >= 100) {
+            currentProgress = 100;
+            clearInterval(interval);
+            setUploadQueue(current => 
+              current.map(item => 
+                item.file === upload.file ? { ...item, progress: 100, status: 'completed' } : item
+              )
+            );
+          } else {
+            setUploadQueue(current => 
+              current.map(item => 
+                item.file === upload.file ? { ...item, progress: currentProgress } : item
+              )
+            );
+          }
+        }, 300);
+      });
     }
   };
 
-  const removeFile = (index: number) => {
-    setUploadedFiles(prev => prev.filter((_, i) => i !== index));
+  const removeFile = (file: File) => {
+    setUploadQueue(prev => prev.filter(item => item.file !== file));
   };
 
   const handleExtractBoq = async () => {
-    if (uploadedFiles.length === 0) return;
+    const readyFiles = uploadQueue.filter(u => u.status === 'completed');
+    if (readyFiles.length === 0) return;
+    
     setIsExtracting(true);
     try {
-      const names = uploadedFiles.map(f => f.name);
+      const names = readyFiles.map(f => f.file.name);
       const data = await extractBoqFromPlans(names);
       setExtractedBoq(data);
       setActiveTab('sor');
@@ -89,7 +128,7 @@ const BoqDashboard: React.FC<any> = ({ onClose, onUpgrade }) => {
       </header>
 
       <div className="flex-1 flex overflow-hidden">
-        {/* Persistent Sidebar for Files & Navigation */}
+        {/* Sidebar */}
         <aside className="w-80 bg-white dark:bg-slate-900/40 border-r border-zinc-200 dark:border-white/5 p-6 flex flex-col overflow-y-auto">
           <nav className="space-y-2 mb-8">
             <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Operations</h3>
@@ -99,20 +138,33 @@ const BoqDashboard: React.FC<any> = ({ onClose, onUpgrade }) => {
           </nav>
 
           <div className="flex-1">
-            <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Document Queue ({uploadedFiles.length})</h3>
-            <div className="space-y-2">
-              {uploadedFiles.map((file, i) => (
-                <div key={i} className="flex items-center justify-between p-3 bg-zinc-100 dark:bg-white/5 rounded-xl border border-zinc-200 dark:border-white/5 group">
-                  <div className="flex items-center gap-3 overflow-hidden">
-                    <FileText size={14} className="text-orange-500 shrink-0" />
-                    <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300 truncate">{file.name}</span>
+            <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Document Queue ({uploadQueue.length})</h3>
+            <div className="space-y-3">
+              {uploadQueue.map((upload, i) => (
+                <div key={i} className="flex flex-col p-3 bg-zinc-100 dark:bg-white/5 rounded-xl border border-zinc-200 dark:border-white/5 group transition-all">
+                  <div className="flex items-center justify-between mb-2 overflow-hidden">
+                    <div className="flex items-center gap-3 overflow-hidden">
+                      <FileText size={14} className={`${upload.status === 'completed' ? 'text-emerald-500' : 'text-orange-500'} shrink-0`} />
+                      <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300 truncate">{upload.file.name}</span>
+                    </div>
+                    {upload.status === 'completed' ? (
+                      <button onClick={() => removeFile(upload.file)} className="p-1 text-slate-400 hover:text-red-500 transition-all">
+                        <Trash2 size={12} />
+                      </button>
+                    ) : (
+                      <span className="text-[9px] font-bold text-slate-400">{upload.progress}%</span>
+                    )}
                   </div>
-                  <button onClick={() => removeFile(i)} className="p-1 text-slate-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all">
-                    <Trash2 size={12} />
-                  </button>
+                  {/* Progress Bar (Gmail Style) */}
+                  <div className="w-full h-1 bg-zinc-200 dark:bg-slate-800 rounded-full overflow-hidden">
+                    <div 
+                      className={`h-full transition-all duration-300 ${upload.status === 'completed' ? 'bg-emerald-500' : 'bg-orange-500'}`}
+                      style={{ width: `${upload.progress}%` }}
+                    />
+                  </div>
                 </div>
               ))}
-              {uploadedFiles.length === 0 && (
+              {uploadQueue.length === 0 && (
                 <div className="text-center py-8 border-2 border-dashed border-zinc-200 dark:border-white/5 rounded-2xl opacity-40">
                   <p className="text-[10px] font-bold uppercase">No files staged</p>
                 </div>
@@ -147,7 +199,7 @@ const BoqDashboard: React.FC<any> = ({ onClose, onUpgrade }) => {
 
                   <button 
                     onClick={handleExtractBoq}
-                    disabled={isExtracting || uploadedFiles.length === 0}
+                    disabled={isExtracting || uploadQueue.length === 0 || uploadQueue.some(u => u.status === 'uploading')}
                     className="w-full bg-orange-600 hover:bg-orange-500 text-white py-5 rounded-2xl font-black uppercase tracking-widest shadow-xl shadow-orange-600/20 flex items-center justify-center gap-3 transition-all active:scale-95 disabled:opacity-50"
                   >
                     {isExtracting ? (
@@ -172,7 +224,7 @@ const BoqDashboard: React.FC<any> = ({ onClose, onUpgrade }) => {
                   <div className="p-10 border-b border-zinc-200 dark:border-white/5 flex justify-between items-center">
                     <div>
                       <h2 className="text-2xl font-black text-slate-900 dark:text-white uppercase italic tracking-tight">Extracted <span className="text-orange-500">BOQ Items</span></h2>
-                      <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-1">Cross-referenced from {uploadedFiles.length} plans</p>
+                      <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-1">Cross-referenced from {uploadQueue.length} plans</p>
                     </div>
                     <div className="flex gap-4">
                       <button className="p-3 bg-zinc-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-2xl hover:bg-zinc-200 transition-all">
@@ -238,7 +290,7 @@ const BoqDashboard: React.FC<any> = ({ onClose, onUpgrade }) => {
               <div className="grid grid-cols-1 md:grid-cols-3 gap-8 animate-in slide-in-from-bottom-4 duration-700">
                 <StatBox label="Synthesized Budget" value={`₹${totalAmount.toLocaleString('en-IN')}`} icon={<IndianRupee/>} color="orange" />
                 <StatBox label="Data Integrity" value="99.4%" icon={<ShieldCheck/>} color="blue" />
-                <StatBox label="Plan Count" value={uploadedFiles.length.toString()} icon={<FileText/>} color="purple" />
+                <StatBox label="Plan Count" value={uploadQueue.length.toString()} icon={<FileText/>} color="purple" />
               </div>
             )}
           </div>
