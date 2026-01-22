@@ -51,8 +51,6 @@ const LandingChat: React.FC<any> = ({ onAuthRequired, onEnterApp, onOpenBoqDashb
           responseImg = "https://images.unsplash.com/photo-1517581177682-a085bb7ffb15?q=80&w=2070";
       } else if (lowerMsg.includes('dam')) {
           responseImg = "https://images.unsplash.com/photo-1541888946425-d81bb19240f5?q=80&w=2070";
-      } else if (lowerMsg.includes('rebar')) {
-          responseImg = "https://images.unsplash.com/photo-1504307651254-35680f356dfd?q=80&w=2070";
       }
 
       setMessages(prev => [...prev, { role: 'assistant', content: responseText, imageUrl: responseImg }]);
@@ -66,15 +64,8 @@ const LandingChat: React.FC<any> = ({ onAuthRequired, onEnterApp, onOpenBoqDashb
   return (
     <div className="flex h-screen bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100 overflow-hidden font-sans relative">
       
-      {/* NEON COLORFUL COMPANY LOGO TOP MIDDLE */}
-      <div className="absolute top-8 left-1/2 -translate-x-1/2 z-[60] pointer-events-none whitespace-nowrap">
-        <span className="text-xl md:text-2xl font-black uppercase tracking-[0.4em] bg-clip-text text-transparent bg-gradient-to-r from-cyan-400 via-fuchsia-500 to-amber-500 drop-shadow-[0_0_8px_rgba(244,63,94,0.4)] animate-pulse-slow">
-          WEAUTOMATES
-        </span>
-      </div>
-
-      {/* RESTORED SIDEBAR */}
-      <aside className="hidden lg:flex w-64 bg-white dark:bg-slate-900 border-r border-zinc-200 dark:border-white/5 flex-col p-6 overflow-y-auto shrink-0 z-50 shadow-2xl">
+      {/* SIDEBAR */}
+      <aside className="hidden lg:flex w-64 bg-white dark:bg-slate-900 border-r border-zinc-200 dark:border-white/5 flex-col p-6 overflow-y-auto shrink-0 z-50 shadow-2xl relative">
         <div className="mb-10 flex items-center gap-3">
           <div className="p-2.5 bg-gradient-to-br from-cyan-500 to-indigo-600 rounded-xl shadow-lg">
             <Zap size={18} className="text-white fill-white"/>
@@ -103,19 +94,26 @@ const LandingChat: React.FC<any> = ({ onAuthRequired, onEnterApp, onOpenBoqDashb
         </div>
       </aside>
 
-      {/* Main Minimal View */}
-      <main className="flex-1 flex flex-col items-center justify-center p-4 md:p-6 transition-all duration-700 relative pt-24">
+      {/* Main Container - Adjusted to center-aligned flex-col */}
+      <main className="flex-1 flex flex-col items-center justify-center p-4 md:p-6 transition-all duration-700 relative overflow-y-auto pt-20">
         
-        {/* Title Group - Updated Greeting and Tight Spacing */}
-        <div className={`text-center max-w-2xl transition-all duration-500 ${messages.length > 0 ? 'mb-2' : 'mb-4'}`}>
-           <h1 className="text-xl md:text-2xl font-black text-slate-900 dark:text-white tracking-tight leading-snug">
-             Welcome! I’m your Construction AI Assistant. How can I help you monitor, analyze, or manage your project today?
-           </h1>
+        {/* WEAUTOMATES LOGO - Placed inside main content flow but absolute-top to ensure symmetry with greeting */}
+        <div className="flex flex-col items-center w-full max-w-2xl mb-12">
+            <span className="text-4xl md:text-5xl font-black uppercase tracking-[0.6em] bg-clip-text text-transparent bg-gradient-to-r from-cyan-400 via-fuchsia-500 to-amber-500 drop-shadow-[0_0_25px_rgba(244,63,94,0.7)] animate-pulse-slow mb-8 transition-all">
+              WEAUTOMATES
+            </span>
+            
+            {/* Greeting Group - Directly under the logo */}
+            <div className={`text-center transition-all duration-500 ${messages.length > 0 ? 'mb-4' : 'mb-0'}`}>
+               <h1 className="text-xl md:text-3xl font-black text-slate-900 dark:text-white tracking-tight leading-snug px-4 drop-shadow-sm">
+                 Welcome! I’m your Construction AI Assistant. How can I help you monitor, analyze, or manage your project today?
+               </h1>
+            </div>
         </div>
 
         {/* Chat / Content Flow */}
-        <div className={`w-full max-w-2xl transition-all duration-500 overflow-hidden flex flex-col ${messages.length > 0 ? 'flex-1 mb-2' : 'h-0 opacity-0'}`}>
-            <div className="flex-1 overflow-y-auto px-4 space-y-3 scrollbar-hide py-1">
+        <div className={`w-full max-w-2xl transition-all duration-500 overflow-hidden flex flex-col ${messages.length > 0 ? 'flex-1 mb-4' : 'h-0 opacity-0'}`}>
+            <div className="flex-1 overflow-y-auto px-4 space-y-4 scrollbar-hide py-2">
                 {messages.map((m, i) => (
                     <div key={i} className={`flex gap-3 animate-in fade-in slide-in-from-bottom-2 duration-300 ${m.role === 'assistant' ? 'items-start' : 'items-start flex-row-reverse'}`}>
                         <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 shadow-sm ${m.role === 'assistant' ? 'bg-zinc-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400' : 'bg-slate-900 dark:bg-white text-white dark:text-slate-900'}`}>
@@ -159,7 +157,7 @@ const LandingChat: React.FC<any> = ({ onAuthRequired, onEnterApp, onOpenBoqDashb
                 <input 
                     value={input}
                     onChange={(e) => setInput(e.target.value)}
-                    placeholder="Ask anything..."
+                    placeholder="Ask about IS codes, site progress, or project analytics..."
                     className="w-full bg-white dark:bg-slate-900 border border-zinc-200 dark:border-white/10 rounded-full pl-14 pr-24 py-4 text-[14px] text-slate-900 dark:text-white outline-none focus:ring-4 focus:ring-cyan-500/10 transition-all shadow-xl font-medium placeholder:text-slate-400"
                 />
 
@@ -178,7 +176,7 @@ const LandingChat: React.FC<any> = ({ onAuthRequired, onEnterApp, onOpenBoqDashb
             </form>
             
             {/* Quick Chips */}
-            <div className="flex flex-wrap justify-center gap-2 mt-3 opacity-60 hover:opacity-100 transition-opacity">
+            <div className="flex flex-wrap justify-center gap-2 mt-4 opacity-60 hover:opacity-100 transition-opacity pb-8">
                {CATEGORIES.map(cat => (
                   <button 
                     key={cat.id} 
@@ -192,37 +190,36 @@ const LandingChat: React.FC<any> = ({ onAuthRequired, onEnterApp, onOpenBoqDashb
             </div>
         </div>
 
-        {/* DEPLOY BOQ EXTRACTOR PROMINENT ACTION */}
+        {/* 2D PLAN TO boq ACTION */}
         {!messages.length && (
-          <div className="mt-8 w-full max-w-2xl animate-in slide-in-from-bottom-4 duration-1000">
+          <div className="mt-4 w-full max-w-2xl animate-in slide-in-from-bottom-4 duration-1000">
              <button 
                 onClick={onOpenBoqDashboard}
-                className="w-full group relative overflow-hidden bg-gradient-to-br from-slate-900 to-slate-800 dark:from-white dark:to-zinc-100 p-6 rounded-[2rem] flex items-center justify-between shadow-2xl transition-all hover:scale-[1.01] active:scale-95"
+                className="w-full group relative overflow-hidden bg-white dark:bg-slate-900 border-2 border-slate-200 dark:border-white/10 p-6 rounded-[2rem] flex items-center justify-between shadow-2xl transition-all hover:border-fuchsia-500/50 hover:scale-[1.01] active:scale-95"
              >
-                <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:scale-125 transition-transform duration-700">
-                   <Calculator size={100} />
+                <div className="absolute top-0 right-0 p-4 opacity-[0.03] group-hover:opacity-[0.08] transition-opacity duration-700">
+                   <Calculator size={100} className="text-fuchsia-500" />
                 </div>
-                <div className="relative z-10 flex items-center gap-4">
-                   <div className="p-3.5 bg-orange-500 rounded-2xl shadow-xl shadow-orange-500/20 text-white">
-                      <Calculator size={24} />
+                <div className="relative z-10 flex items-center gap-6">
+                   <div className="p-4 bg-gradient-to-br from-cyan-400 via-fuchsia-500 to-amber-500 rounded-2xl shadow-xl shadow-fuchsia-500/20 text-white">
+                      <Calculator size={28} />
                    </div>
                    <div className="text-left">
-                      <h3 className="text-lg font-black text-white dark:text-slate-900 uppercase italic tracking-tight">Deploy BOQ Extractor</h3>
-                      <p className="text-[9px] text-slate-400 dark:text-slate-500 font-bold uppercase tracking-widest mt-1">IS-1200 Neural Measurement Engine</p>
+                      <h3 className="text-2xl font-black text-slate-900 dark:text-white uppercase italic tracking-tighter leading-none">2D PLAN TO boq</h3>
                    </div>
                 </div>
-                <div className="relative z-10 w-10 h-10 bg-white/10 dark:bg-black/5 rounded-full flex items-center justify-center text-white dark:text-slate-900 group-hover:translate-x-2 transition-transform">
-                   <ArrowRight size={20} />
+                <div className="relative z-10 w-12 h-12 bg-slate-100 dark:bg-white/5 rounded-full flex items-center justify-center text-slate-900 dark:text-white group-hover:bg-fuchsia-500 group-hover:text-white group-hover:translate-x-2 transition-all">
+                   <ArrowRight size={24} />
                 </div>
              </button>
              
-             <div className="grid grid-cols-2 gap-3 mt-3">
-                <button onClick={onEnterApp} className="p-4 bg-white dark:bg-slate-900 border border-zinc-200 dark:border-white/10 rounded-2xl flex items-center gap-3 hover:bg-zinc-50 transition-all shadow-xl group">
-                   <div className="p-2 bg-emerald-500/10 rounded-lg text-emerald-500 group-hover:scale-110 transition-transform"><ShieldCheck size={16}/></div>
+             <div className="grid grid-cols-2 gap-3 mt-3 pb-12">
+                <button onClick={onEnterApp} className="p-4 bg-white dark:bg-slate-900 border border-zinc-200 dark:border-white/10 rounded-2xl flex items-center gap-3 hover:border-cyan-500/50 transition-all shadow-xl group">
+                   <div className="p-2 bg-cyan-500/10 rounded-lg text-cyan-500 group-hover:scale-110 transition-transform"><ShieldCheck size={16}/></div>
                    <span className="text-[10px] font-black uppercase tracking-widest text-slate-600 dark:text-slate-300 text-left">Regulatory Vault</span>
                 </button>
-                <button onClick={onEnterApp} className="p-4 bg-white dark:bg-slate-900 border border-zinc-200 dark:border-white/10 rounded-2xl flex items-center gap-3 hover:bg-zinc-50 transition-all shadow-xl group">
-                   <div className="p-2 bg-blue-500/10 rounded-lg text-blue-500 group-hover:scale-110 transition-transform"><Video size={16}/></div>
+                <button onClick={onEnterApp} className="p-4 bg-white dark:bg-slate-900 border border-zinc-200 dark:border-white/10 rounded-2xl flex items-center gap-3 hover:border-amber-500/50 transition-all shadow-xl group">
+                   <div className="p-2 bg-amber-500/10 rounded-lg text-amber-500 group-hover:scale-110 transition-transform"><Video size={16}/></div>
                    <span className="text-[10px] font-black uppercase tracking-widest text-slate-600 dark:text-slate-300 text-left">Vision Monitor</span>
                 </button>
              </div>

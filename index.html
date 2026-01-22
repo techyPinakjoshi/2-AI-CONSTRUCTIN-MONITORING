@@ -4,7 +4,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>ConstructAI Monitor | 2026 Digital Twin</title>
+    <title>ConstructAI Monitor | Powered by weautomates</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;900&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
     <script>
@@ -22,11 +22,16 @@
             animation: {
               'pulse-slow': 'pulse 4s cubic-bezier(0.4, 0, 0.6, 1) infinite',
               'float': 'float 6s ease-in-out infinite',
+              'neon-glow': 'neon 3s ease-in-out infinite alternate',
             },
             keyframes: {
               float: {
                 '0%, 100%': { transform: 'translateY(0px)' },
                 '50%': { transform: 'translateY(-20px)' },
+              },
+              neon: {
+                'from': { textShadow: '0 0 10px #fff, 0 0 20px #fff, 0 0 30px #e60073, 0 0 40px #e60073' },
+                'to': { textShadow: '0 0 20px #fff, 0 0 30px #ff4da6, 0 0 40px #ff4da6, 0 0 50px #ff4da6' }
               }
             }
           },
@@ -40,7 +45,6 @@
       ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
       .dark ::-webkit-scrollbar-thumb { background: #334155; }
       
-      /* Dynamic Construction Background */
       .site-bg {
         position: fixed;
         inset: 0;
@@ -52,7 +56,6 @@
         background: radial-gradient(circle at 50% 50%, #0f172a 0%, #020617 100%);
       }
 
-      /* Blueprint / Grid Overlay */
       .blueprint-overlay {
         position: absolute;
         inset: 0;
@@ -63,24 +66,6 @@
         mask-image: radial-gradient(ellipse at center, black, transparent 80%);
       }
 
-      /* Construction Silhouettes */
-      .crane-silhouette {
-        position: absolute;
-        bottom: 0;
-        right: 5%;
-        width: 300px;
-        height: 400px;
-        opacity: 0.1;
-        background: currentColor;
-        clip-path: polygon(45% 0, 55% 0, 55% 85%, 100% 85%, 100% 90%, 55% 90%, 55% 100%, 45% 100%, 45% 90%, 0 90%, 0 85%, 45% 85%);
-        color: #0369a1;
-      }
-      .dark .crane-silhouette {
-        color: #38bdf8;
-        opacity: 0.05;
-      }
-
-      /* Scanning "Laser" Line */
       .scan-line {
         position: absolute;
         top: 0;
@@ -96,18 +81,6 @@
         0% { transform: translateY(-100vh); }
         100% { transform: translateY(100vh); }
       }
-
-      .grid-bg {
-        background-image: radial-gradient(circle at 2px 2px, currentColor 1px, transparent 0);
-        background-size: 40px 40px;
-      }
-      .bento-card {
-        backdrop-filter: blur(12px);
-        border: 1px solid rgba(255, 255, 255, 0.05);
-      }
-      .light .bento-card {
-        border: 1px solid rgba(0, 0, 0, 0.05);
-      }
     </style>
   <script type="importmap">
 {
@@ -122,14 +95,10 @@
 </script>
 </head>
   <body class="bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100 antialiased overflow-hidden selection:bg-cyan-500/30">
-    <!-- Visual Background -->
     <div class="site-bg">
       <div class="blueprint-overlay"></div>
-      <div class="crane-silhouette animate-float"></div>
-      <div class="crane-silhouette" style="right: 25%; height: 300px; transform: scaleX(-1); opacity: 0.07;"></div>
       <div class="scan-line"></div>
     </div>
-
     <div id="root"></div>
     <script type="module" src="index.tsx"></script>
   </body>
