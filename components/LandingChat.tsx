@@ -1,332 +1,245 @@
 
 import React, { useState, useRef, useEffect, useContext } from 'react';
 import { 
-  Send, Zap, Bot, User, MessageSquare, 
-  Calculator, Layout, Video, Sun, Moon,
-  ArrowRight, ShieldCheck, Sparkles, Globe,
-  Box, UploadCloud, Loader2, CheckCircle, Save, X
+  Send, Zap, Bot, User, Building2, Waves, Milestone, FlaskConical, 
+  Sparkles, Globe, Moon, Sun, ArrowRight, X, ImageIcon, MessageSquare,
+  Box, Calculator, Layout, Video, ShieldCheck, Cpu, Mic, Plus
 } from 'lucide-react';
-import { getRegulatoryAdvice, reconstructBimFromPlans } from '../services/geminiService';
+import { getRegulatoryAdvice } from '../services/geminiService';
 import { ThemeContext } from '../App';
 
-interface Message { role: 'user' | 'assistant'; content: string; }
+interface Message { 
+  role: 'user' | 'assistant'; 
+  content: string; 
+  imageUrl?: string;
+}
+
+const CATEGORIES = [
+  { id: 'buildings', name: 'Buildings', icon: <Building2 size={14} />, color: 'bg-blue-600', prompt: 'Tell me about residential building codes (IS 456).' },
+  { id: 'dams', name: 'Dams', icon: <Waves size={14} />, color: 'bg-cyan-600', prompt: 'What are the safety codes for gravity dams in India?' },
+  { id: 'bridges', name: 'Bridges', icon: <Milestone size={14} />, color: 'bg-indigo-600', prompt: 'IRC standards for highway bridge construction.' },
+  { id: 'testing', name: 'Materials', icon: <FlaskConical size={14} />, color: 'bg-amber-600', prompt: 'Standard tests for concrete grade M25 (IS 2386).' },
+];
 
 const LandingChat: React.FC<any> = ({ onAuthRequired, onEnterApp, onOpenBoqDashboard, user, children }) => {
   const { isDark, toggleTheme } = useContext(ThemeContext);
-  const [messages, setMessages] = useState<Message[]>([
-    { role: 'assistant', content: "ConstructAI System Online. I'm your IS Code expert. How can I assist today?" }
-  ]);
+  const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
-  const [showBimGenerator, setShowBimGenerator] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isTyping]);
 
-  const handleSend = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!input.trim() || isTyping) return;
-    const userMsg = input;
+  const handleSend = async (e?: React.FormEvent, customInput?: string) => {
+    if (e) e.preventDefault();
+    const finalInput = customInput || input;
+    if (!finalInput.trim() || isTyping) return;
+
+    const userMsg = finalInput;
     setInput('');
     setIsTyping(true);
     setMessages(prev => [...prev, { role: 'user', content: userMsg }]);
+
     try {
-      const response = await getRegulatoryAdvice(userMsg);
-      setMessages(prev => [...prev, { role: 'assistant', content: response }]);
+      const responseText = await getRegulatoryAdvice(userMsg);
+      
+      let responseImg: string | undefined = undefined;
+      const lowerMsg = userMsg.toLowerCase();
+      if (lowerMsg.includes('concrete') || lowerMsg.includes('m25')) {
+          responseImg = "https://images.unsplash.com/photo-1517581177682-a085bb7ffb15?q=80&w=2070";
+      } else if (lowerMsg.includes('dam')) {
+          responseImg = "https://images.unsplash.com/photo-1541888946425-d81bb19240f5?q=80&w=2070";
+      } else if (lowerMsg.includes('rebar')) {
+          responseImg = "https://images.unsplash.com/photo-1504307651254-35680f356dfd?q=80&w=2070";
+      }
+
+      setMessages(prev => [...prev, { role: 'assistant', content: responseText, imageUrl: responseImg }]);
     } catch (error) {
-      setMessages(prev => [...prev, { role: 'assistant', content: "Sync error. Check connection." }]);
+      setMessages(prev => [...prev, { role: 'assistant', content: "Neural link lost. Re-establishing..." }]);
     } finally {
       setIsTyping(false);
     }
   };
 
   return (
-    <div className="flex h-screen bg-transparent text-slate-900 dark:text-slate-100 overflow-hidden font-sans">
-      {/* Sidebar - Professional Width */}
-      <aside className="hidden lg:flex w-72 bg-white/40 dark:bg-slate-900/40 backdrop-blur-2xl border-r border-zinc-200 dark:border-white/5 flex-col p-6 overflow-y-auto scrollbar-hide">
-        <div className="flex items-center justify-between mb-10">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-gradient-to-br from-cyan-400 to-blue-600 rounded-xl shadow-xl">
-              <Zap size={20} className="text-white fill-white"/>
-            </div>
-            <span className="font-black text-xl tracking-tighter uppercase italic dark:text-white">Construct<span className="text-cyan-500">AI</span></span>
+    <div className="flex h-screen bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100 overflow-hidden font-sans relative">
+      
+      {/* NEON COLORFUL COMPANY LOGO TOP MIDDLE */}
+      <div className="absolute top-8 left-1/2 -translate-x-1/2 z-[60] pointer-events-none whitespace-nowrap">
+        <span className="text-xl md:text-2xl font-black uppercase tracking-[0.4em] bg-clip-text text-transparent bg-gradient-to-r from-cyan-400 via-fuchsia-500 to-amber-500 drop-shadow-[0_0_8px_rgba(244,63,94,0.4)] animate-pulse-slow">
+          WEAUTOMATES
+        </span>
+      </div>
+
+      {/* RESTORED SIDEBAR */}
+      <aside className="hidden lg:flex w-64 bg-white dark:bg-slate-900 border-r border-zinc-200 dark:border-white/5 flex-col p-6 overflow-y-auto shrink-0 z-50 shadow-2xl">
+        <div className="mb-10 flex items-center gap-3">
+          <div className="p-2.5 bg-gradient-to-br from-cyan-500 to-indigo-600 rounded-xl shadow-lg">
+            <Zap size={18} className="text-white fill-white"/>
           </div>
-          <button onClick={toggleTheme} className="p-2 hover:bg-zinc-200 dark:hover:bg-slate-800 rounded-xl transition-all">
-            {isDark ? <Sun size={18} className="text-amber-400" /> : <Moon size={18} className="text-indigo-600" />}
-          </button>
+          <span className="font-black text-lg tracking-tighter uppercase italic dark:text-white">Construct<span className="text-cyan-500">AI</span></span>
         </div>
 
-        <div className="space-y-8 flex-1">
-          <section>
-            <h3 className="text-[10px] font-black text-slate-400 dark:text-slate-600 uppercase tracking-widest mb-4 flex items-center gap-2">
-               <Globe size={12} /> Portal Services
-            </h3>
-            <div className="grid grid-cols-1 gap-2">
-              <ServiceItem icon={<MessageSquare size={16}/>} title="IS Specialist AI" color="text-cyan-500" onClick={() => {}} />
-              <ServiceItem icon={<Box size={16}/>} title="2D to BIM Model" color="text-purple-500" onClick={() => setShowBimGenerator(true)} />
-              <ServiceItem icon={<Calculator size={16}/>} title="BOQ Extraction" color="text-orange-500" onClick={onOpenBoqDashboard} />
-              <ServiceItem icon={<Layout size={16}/>} title="Site Dashboard" color="text-emerald-500" onClick={onEnterApp} />
-              <ServiceItem icon={<Video size={16}/>} title="AI Monitoring" color="text-blue-500" onClick={onEnterApp} />
+        <nav className="space-y-4 flex-1">
+            <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">Core Tools</h3>
+            <div className="space-y-1">
+                <ServiceLink icon={<MessageSquare size={14}/>} label="Neural Chat" active />
+                <ServiceLink icon={<Calculator size={14}/>} label="BOQ Engine" onClick={onOpenBoqDashboard} />
+                <ServiceLink icon={<Box size={14}/>} label="BIM Reconstruction" onClick={onEnterApp} />
+                <ServiceLink icon={<Video size={14}/>} label="Vision Monitor" onClick={onEnterApp} />
             </div>
-          </section>
+        </nav>
 
-          {!user && (
-            <section className="bg-cyan-500/5 p-5 rounded-2xl border border-cyan-500/10 backdrop-blur-md">
-              <p className="text-xs text-slate-500 dark:text-slate-400 mb-4 leading-tight uppercase font-bold tracking-tight">Login required for live monitoring access.</p>
-              <button onClick={onAuthRequired} className="w-full bg-cyan-600 hover:bg-cyan-500 text-white rounded-xl py-3 text-xs font-black uppercase tracking-widest transition-all">
-                Sign In
-              </button>
-            </section>
-          )}
+        <div className="mt-auto pt-6 border-t border-zinc-200 dark:border-white/5 flex flex-col gap-3">
+           <button onClick={toggleTheme} className="w-full flex items-center justify-between p-3 rounded-xl bg-zinc-50 dark:bg-slate-800 text-slate-500 border border-zinc-200 dark:border-white/5 transition-all">
+              <span className="text-[10px] font-bold uppercase tracking-widest">Theme</span>
+              {isDark ? <Sun size={14} className="text-amber-400" /> : <Moon size={14} className="text-indigo-600" />}
+           </button>
+           <button onClick={onAuthRequired} className="w-full bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-xl py-3 text-[10px] font-black uppercase tracking-[0.2em] shadow-xl hover:scale-105 transition-all active:scale-95">
+              Portal Access
+           </button>
         </div>
       </aside>
 
-      <main className="flex-1 flex flex-col relative overflow-y-auto scrollbar-hide">
-        <div className="flex-1 flex flex-col items-center">
-          <div className="w-full max-w-4xl px-8 py-10 flex flex-col items-center">
-            
-            {/* Professional Header */}
-            <div className="text-center mb-8">
-              <div className="inline-flex items-center gap-2 px-4 py-1.5 bg-cyan-500/10 border border-cyan-500/20 rounded-full mb-4 backdrop-blur-md">
-                <Sparkles size={12} className="text-cyan-600 dark:text-cyan-400" />
-                <span className="text-[10px] font-black uppercase tracking-widest">Operational v4.0 Active</span>
-              </div>
-              <h1 className="text-4xl md:text-6xl font-black text-slate-900 dark:text-white mb-3 tracking-tighter uppercase italic leading-none">
-                Construct<span className="text-cyan-500 drop-shadow-2xl">AI</span>
-              </h1>
-              <p className="text-slate-500 dark:text-slate-400 text-sm md:text-lg max-w-xl mx-auto leading-relaxed font-medium">
-                Bridge architectural precision with real-world site execution and automated IS Code compliance.
-              </p>
-            </div>
+      {/* Main Minimal View */}
+      <main className="flex-1 flex flex-col items-center justify-center p-4 md:p-6 transition-all duration-700 relative pt-24">
+        
+        {/* Title Group - Updated Greeting and Tight Spacing */}
+        <div className={`text-center max-w-2xl transition-all duration-500 ${messages.length > 0 ? 'mb-2' : 'mb-4'}`}>
+           <h1 className="text-xl md:text-2xl font-black text-slate-900 dark:text-white tracking-tight leading-snug">
+             Welcome! I’m your Construction AI Assistant. How can I help you monitor, analyze, or manage your project today?
+           </h1>
+        </div>
 
-            {/* Chat Area - ULTRA COMPACT */}
-            <div className="w-full max-w-xl bg-white/70 dark:bg-slate-900/60 rounded-[2rem] p-3 shadow-2xl border border-zinc-200 dark:border-white/5 mb-8 flex flex-col h-[180px] transition-all backdrop-blur-xl">
-              <div className="flex-1 space-y-2 overflow-y-auto mb-1 pr-2 scrollbar-hide">
+        {/* Chat / Content Flow */}
+        <div className={`w-full max-w-2xl transition-all duration-500 overflow-hidden flex flex-col ${messages.length > 0 ? 'flex-1 mb-2' : 'h-0 opacity-0'}`}>
+            <div className="flex-1 overflow-y-auto px-4 space-y-3 scrollbar-hide py-1">
                 {messages.map((m, i) => (
-                  <div key={i} className={`flex gap-3 animate-in fade-in slide-in-from-bottom-1 duration-300 ${m.role === 'assistant' ? 'items-start' : 'items-start flex-row-reverse'}`}>
-                    <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 shadow-md ${m.role === 'assistant' ? 'bg-cyan-600' : 'bg-slate-800'}`}>
-                      {m.role === 'assistant' ? <Bot size={14} className="text-white"/> : <User size={14} className="text-white"/>}
+                    <div key={i} className={`flex gap-3 animate-in fade-in slide-in-from-bottom-2 duration-300 ${m.role === 'assistant' ? 'items-start' : 'items-start flex-row-reverse'}`}>
+                        <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 shadow-sm ${m.role === 'assistant' ? 'bg-zinc-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400' : 'bg-slate-900 dark:bg-white text-white dark:text-slate-900'}`}>
+                            {m.role === 'assistant' ? <Bot size={12} /> : <User size={12} />}
+                        </div>
+                        <div className={`flex flex-col gap-1.5 max-w-[85%] ${m.role === 'assistant' ? 'items-start' : 'items-end'}`}>
+                            <div className={`px-4 py-2.5 rounded-2xl text-[12px] leading-relaxed font-medium ${
+                                m.role === 'assistant' 
+                                ? 'bg-zinc-50 dark:bg-white/5 text-slate-800 dark:text-slate-200 border border-zinc-100 dark:border-white/10' 
+                                : 'bg-slate-900 dark:bg-white text-white dark:text-slate-900 shadow-lg'
+                            }`}>
+                                {m.content}
+                            </div>
+                            {m.imageUrl && (
+                                <img src={m.imageUrl} className="rounded-xl border border-zinc-200 dark:border-white/10 shadow-lg max-w-[200px]" alt="Technical Ref" />
+                            )}
+                        </div>
                     </div>
-                    <div className={`px-4 py-2 rounded-2xl text-[13px] leading-snug font-medium max-w-[85%] ${m.role === 'assistant' ? 'bg-zinc-100 dark:bg-white/5 text-slate-800 dark:text-slate-200' : 'bg-cyan-600 text-white shadow-md'}`}>
-                      {m.content}
-                    </div>
-                  </div>
                 ))}
                 {isTyping && (
-                  <div className="flex gap-1.5 items-center pl-1 pt-0.5">
+                  <div className="flex gap-1 items-center pl-10">
                     <div className="w-1 h-1 bg-cyan-500 rounded-full animate-bounce"></div>
+                    <div className="w-1 h-1 bg-cyan-500 rounded-full animate-bounce [animation-delay:0.1s]"></div>
                     <div className="w-1 h-1 bg-cyan-500 rounded-full animate-bounce [animation-delay:0.2s]"></div>
-                    <div className="w-1 h-1 bg-cyan-500 rounded-full animate-bounce [animation-delay:0.4s]"></div>
                   </div>
                 )}
                 <div ref={chatEndRef} />
-              </div>
-
-              {/* Tighter Input Section */}
-              <form onSubmit={handleSend} className="relative pt-2">
-                <input 
-                  value={input}
-                  onChange={(e) => setInput(e.target.value)}
-                  placeholder="Ask IS Code 456 queries..."
-                  className="w-full bg-zinc-100/50 dark:bg-black/40 border border-zinc-200 dark:border-white/10 rounded-xl px-5 py-3 pr-14 text-sm text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-cyan-500/30 transition-all shadow-inner backdrop-blur-md"
-                />
-                <button type="submit" className="absolute right-1.5 top-[18px] p-2 bg-cyan-600 hover:bg-cyan-500 text-white rounded-lg transition-all active:scale-90 shadow-lg">
-                  <Send size={16}/>
-                </button>
-              </form>
             </div>
-
-            {/* Quick Actions */}
-            <div className="w-full max-w-2xl grid grid-cols-1 md:grid-cols-2 gap-6">
-              <ActionCard 
-                icon={<Calculator size={20}/>} 
-                title="Auto BOQ Extractor" 
-                desc="Generate PWD schedule bills from 2D plans instantly."
-                color="orange"
-                onClick={onOpenBoqDashboard}
-              />
-              <ActionCard 
-                icon={<ShieldCheck size={20}/>} 
-                title="IS Compliance Guard" 
-                desc="Real-time site verification against Indian Standards."
-                color="emerald"
-                onClick={onEnterApp}
-              />
-            </div>
-          </div>
         </div>
+
+        {/* Minimal Pill Input */}
+        <div className="w-full max-w-2xl px-4">
+            <form onSubmit={handleSend} className="relative group">
+                <div className="absolute left-4 top-1/2 -translate-y-1/2 flex items-center gap-2">
+                   <button type="button" className="text-slate-400 hover:text-slate-600 dark:hover:text-white transition-colors">
+                      <Plus size={18} />
+                   </button>
+                   <div className="w-px h-4 bg-slate-200 dark:bg-slate-800"></div>
+                </div>
+                
+                <input 
+                    value={input}
+                    onChange={(e) => setInput(e.target.value)}
+                    placeholder="Ask anything..."
+                    className="w-full bg-white dark:bg-slate-900 border border-zinc-200 dark:border-white/10 rounded-full pl-14 pr-24 py-4 text-[14px] text-slate-900 dark:text-white outline-none focus:ring-4 focus:ring-cyan-500/10 transition-all shadow-xl font-medium placeholder:text-slate-400"
+                />
+
+                <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2">
+                    <button type="button" className="text-slate-400 hover:text-slate-600 dark:hover:text-white transition-colors">
+                       <Mic size={16} />
+                    </button>
+                    <button 
+                        type="submit" 
+                        disabled={!input.trim() || isTyping}
+                        className="w-9 h-9 bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-full flex items-center justify-center transition-all hover:scale-110 active:scale-95 disabled:opacity-30 shadow-lg"
+                    >
+                        <Send size={14} className="fill-current"/>
+                    </button>
+                </div>
+            </form>
+            
+            {/* Quick Chips */}
+            <div className="flex flex-wrap justify-center gap-2 mt-3 opacity-60 hover:opacity-100 transition-opacity">
+               {CATEGORIES.map(cat => (
+                  <button 
+                    key={cat.id} 
+                    onClick={() => handleSend(undefined, cat.prompt)}
+                    className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-zinc-100 dark:bg-slate-900 border border-zinc-200 dark:border-white/5 hover:border-cyan-500 transition-all shadow-sm"
+                  >
+                    <div className="text-slate-500">{cat.icon}</div>
+                    <span className="text-[9px] font-black uppercase tracking-widest text-slate-600 dark:text-slate-300">{cat.name}</span>
+                  </button>
+               ))}
+            </div>
+        </div>
+
+        {/* DEPLOY BOQ EXTRACTOR PROMINENT ACTION */}
+        {!messages.length && (
+          <div className="mt-8 w-full max-w-2xl animate-in slide-in-from-bottom-4 duration-1000">
+             <button 
+                onClick={onOpenBoqDashboard}
+                className="w-full group relative overflow-hidden bg-gradient-to-br from-slate-900 to-slate-800 dark:from-white dark:to-zinc-100 p-6 rounded-[2rem] flex items-center justify-between shadow-2xl transition-all hover:scale-[1.01] active:scale-95"
+             >
+                <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:scale-125 transition-transform duration-700">
+                   <Calculator size={100} />
+                </div>
+                <div className="relative z-10 flex items-center gap-4">
+                   <div className="p-3.5 bg-orange-500 rounded-2xl shadow-xl shadow-orange-500/20 text-white">
+                      <Calculator size={24} />
+                   </div>
+                   <div className="text-left">
+                      <h3 className="text-lg font-black text-white dark:text-slate-900 uppercase italic tracking-tight">Deploy BOQ Extractor</h3>
+                      <p className="text-[9px] text-slate-400 dark:text-slate-500 font-bold uppercase tracking-widest mt-1">IS-1200 Neural Measurement Engine</p>
+                   </div>
+                </div>
+                <div className="relative z-10 w-10 h-10 bg-white/10 dark:bg-black/5 rounded-full flex items-center justify-center text-white dark:text-slate-900 group-hover:translate-x-2 transition-transform">
+                   <ArrowRight size={20} />
+                </div>
+             </button>
+             
+             <div className="grid grid-cols-2 gap-3 mt-3">
+                <button onClick={onEnterApp} className="p-4 bg-white dark:bg-slate-900 border border-zinc-200 dark:border-white/10 rounded-2xl flex items-center gap-3 hover:bg-zinc-50 transition-all shadow-xl group">
+                   <div className="p-2 bg-emerald-500/10 rounded-lg text-emerald-500 group-hover:scale-110 transition-transform"><ShieldCheck size={16}/></div>
+                   <span className="text-[10px] font-black uppercase tracking-widest text-slate-600 dark:text-slate-300 text-left">Regulatory Vault</span>
+                </button>
+                <button onClick={onEnterApp} className="p-4 bg-white dark:bg-slate-900 border border-zinc-200 dark:border-white/10 rounded-2xl flex items-center gap-3 hover:bg-zinc-50 transition-all shadow-xl group">
+                   <div className="p-2 bg-blue-500/10 rounded-lg text-blue-500 group-hover:scale-110 transition-transform"><Video size={16}/></div>
+                   <span className="text-[10px] font-black uppercase tracking-widest text-slate-600 dark:text-slate-300 text-left">Vision Monitor</span>
+                </button>
+             </div>
+          </div>
+        )}
       </main>
-      
-      {showBimGenerator && (
-        <BimGeneratorModal onClose={() => setShowBimGenerator(false)} />
-      )}
       
       {children}
     </div>
   );
 };
 
-const BimGeneratorModal = ({ onClose }: { onClose: () => void }) => {
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [result, setResult] = useState<any>(null);
-  const [files, setFiles] = useState<string[]>([]);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
-  const handleReconstruct = async () => {
-    if (files.length === 0) return;
-    setIsGenerating(true);
-    try {
-      const data = await reconstructBimFromPlans(files);
-      setResult(data);
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setIsGenerating(false);
-    }
-  };
-
-  const handleSaveModel = () => {
-    // Logic to save model to user profile / database
-    alert("BIM Model saved successfully to your Digital Twin library.");
-    onClose();
-  };
-
-  return (
-    <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/70 backdrop-blur-xl p-6 animate-in fade-in duration-300">
-      <div className="bg-slate-900 border border-slate-700 w-full max-w-2xl rounded-[3rem] overflow-hidden shadow-2xl flex flex-col">
-        <header className="p-8 border-b border-slate-800 flex justify-between items-center bg-gradient-to-r from-purple-950/20 to-slate-900">
-          <div className="flex items-center gap-4">
-            <div className="p-3 bg-purple-600 rounded-2xl shadow-xl shadow-purple-600/20">
-              <Box className="text-white" size={24} />
-            </div>
-            <div>
-              <h3 className="text-xl font-black text-white uppercase italic tracking-tight">AI BIM Reconstruction</h3>
-              <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-1">2D CAD to 3D Digital Twin (Gemini 3 Pro)</p>
-            </div>
-          </div>
-          <button onClick={onClose} className="p-3 text-slate-500 hover:text-white transition-colors"><X size={24}/></button>
-        </header>
-
-        <div className="p-10 flex-1 overflow-y-auto max-h-[70vh] scrollbar-hide">
-          {!result ? (
-            <div className="space-y-8">
-              <div 
-                onClick={() => fileInputRef.current?.click()}
-                className="group border-4 border-dashed border-slate-800 rounded-[2.5rem] p-16 text-center hover:border-purple-500/40 hover:bg-purple-500/5 transition-all cursor-pointer"
-              >
-                <UploadCloud className="mx-auto text-slate-700 group-hover:text-purple-500 transition-colors mb-4" size={48} />
-                <p className="text-sm font-black text-slate-400 uppercase tracking-widest">Stage Architectural & Structural Plans</p>
-                <input 
-                  type="file" 
-                  multiple 
-                  ref={fileInputRef} 
-                  className="hidden" 
-                  // Fix: Casting to any to avoid "name" property missing on type unknown
-                  onChange={(e) => e.target.files && setFiles(Array.from(e.target.files).map((f: any) => f.name))} 
-                />
-              </div>
-
-              {files.length > 0 && (
-                <div className="bg-slate-950/50 p-6 rounded-3xl border border-slate-800">
-                  <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-4">Files Ready for Analysis ({files.length})</h4>
-                  <div className="space-y-2">
-                    {files.map((f, i) => (
-                      <div key={i} className="flex items-center gap-3 text-xs text-slate-300 bg-slate-900 p-3 rounded-xl border border-slate-800">
-                        <CheckCircle size={14} className="text-purple-500" /> {f}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              <button 
-                onClick={handleReconstruct}
-                disabled={files.length === 0 || isGenerating}
-                className="w-full bg-purple-600 hover:bg-purple-500 text-white py-5 rounded-2xl font-black uppercase tracking-widest shadow-xl shadow-purple-600/20 flex items-center justify-center gap-3 transition-all active:scale-95 disabled:opacity-50"
-              >
-                {isGenerating ? <Loader2 className="animate-spin" size={20} /> : <Zap size={20} />}
-                {isGenerating ? "Synthesizing 3D Elements..." : "Build BIM Model"}
-              </button>
-            </div>
-          ) : (
-            <div className="space-y-6 animate-in slide-in-from-bottom-4 duration-500">
-              <div className="bg-emerald-500/10 border border-emerald-500/20 p-8 rounded-[2.5rem] flex items-center justify-between">
-                <div>
-                  <h4 className="text-emerald-500 font-black uppercase tracking-tight italic text-lg">Reconstruction Success</h4>
-                  <p className="text-xs text-slate-400 mt-1">Generated {(result.elements as any[]).length} components across {result.levels} levels.</p>
-                </div>
-                <div className="p-4 bg-emerald-500 rounded-3xl shadow-xl shadow-emerald-500/20 text-white">
-                  <CheckCircle size={24} />
-                </div>
-              </div>
-
-              <div className="bg-slate-950/50 rounded-[2.5rem] border border-slate-800 overflow-hidden">
-                <div className="p-6 bg-slate-900/50 border-b border-slate-800 flex justify-between items-center">
-                   <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Model Schema Preview</span>
-                   {result.isCodeCompliant && (
-                     <span className="px-3 py-1 bg-cyan-500/10 text-cyan-500 text-[10px] font-black rounded-full border border-cyan-500/20">IS 456 COMPLIANT</span>
-                   )}
-                </div>
-                <div className="p-8 space-y-4">
-                  {(result.elements as any[]).map((el: any, i: number) => (
-                    <div key={i} className="flex items-center justify-between py-3 border-b border-slate-900 last:border-0">
-                      <div className="flex items-center gap-3">
-                        <div className="w-2 h-2 rounded-full bg-purple-500"></div>
-                        <span className="text-xs font-bold text-slate-200">{el.type}</span>
-                      </div>
-                      <span className="text-[10px] font-mono text-slate-500 bg-slate-900 px-2 py-1 rounded-md">{el.dimensions}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div className="flex gap-4">
-                <button 
-                  onClick={() => setResult(null)}
-                  className="flex-1 py-5 border border-slate-700 text-slate-400 rounded-2xl font-black uppercase text-xs tracking-widest hover:bg-slate-800 transition-all"
-                >
-                  Start Over
-                </button>
-                <button 
-                  onClick={handleSaveModel}
-                  className="flex-[2] bg-cyan-600 hover:bg-cyan-500 text-white py-5 rounded-2xl font-black uppercase tracking-widest shadow-xl shadow-cyan-600/20 flex items-center justify-center gap-3 transition-all"
-                >
-                  <Save size={18} /> Save to Digital Twin
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-};
-
-const ServiceItem = ({ icon, title, color, onClick }: any) => (
-  <button onClick={onClick} className="w-full flex items-center gap-4 p-3.5 rounded-2xl hover:bg-zinc-200/50 dark:hover:bg-white/5 transition-all group text-left">
-    <div className={`p-2 rounded-xl bg-zinc-100 dark:bg-slate-800 ${color} group-hover:scale-110 transition-transform shadow-sm`}>{icon}</div>
-    <span className="text-xs font-black uppercase tracking-tight text-slate-600 dark:text-slate-400 group-hover:text-slate-900 dark:group-hover:text-white">{title}</span>
+const ServiceLink = ({ icon, label, onClick, active }: any) => (
+  <button onClick={onClick} className={`w-full flex items-center gap-3 p-3 rounded-xl transition-all text-left group ${active ? 'bg-cyan-500/10 text-cyan-600 dark:text-cyan-400' : 'text-slate-500 hover:bg-zinc-100 dark:hover:bg-white/5'}`}>
+    <div className={`p-2 rounded-lg ${active ? 'bg-cyan-600 text-white' : 'bg-zinc-50 dark:bg-slate-800'} group-hover:scale-110 transition-transform shadow-sm shrink-0`}>{icon}</div>
+    <span className="text-[11px] font-black uppercase tracking-tight truncate">{label}</span>
   </button>
 );
-
-const ActionCard = ({ icon, title, desc, color, onClick }: any) => {
-  const styles = {
-    orange: "bg-orange-500/10 text-orange-600 border-orange-500/20",
-    emerald: "bg-emerald-500/10 text-emerald-600 border-emerald-500/20"
-  };
-  return (
-    <button onClick={onClick} className="flex flex-col p-6 rounded-[2.5rem] bg-white/60 dark:bg-slate-900/40 backdrop-blur-xl border border-zinc-200 dark:border-white/5 text-left hover:scale-[1.02] transition-all group shadow-xl">
-      <div className={`p-3 rounded-2xl w-fit mb-4 ${styles[color as keyof typeof styles]}`}>{icon}</div>
-      <h4 className="text-base font-black text-slate-900 dark:text-white uppercase italic tracking-tight group-hover:text-cyan-500 transition-colors">{title}</h4>
-      <p className="text-sm text-slate-500 dark:text-slate-400 leading-relaxed font-medium mt-2">{desc}</p>
-      <div className="mt-4 flex items-center gap-2 text-slate-400 dark:text-slate-600 group-hover:text-cyan-500 transition-colors">
-        <span className="text-[10px] font-black uppercase tracking-widest">Get Operational</span>
-        <ArrowRight size={14} className="group-hover:translate-x-1 transition-transform" />
-      </div>
-    </button>
-  );
-};
 
 export default LandingChat;

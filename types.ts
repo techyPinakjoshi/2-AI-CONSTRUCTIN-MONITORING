@@ -86,6 +86,15 @@ export interface TaskLog {
   verifiedBy: string;
 }
 
+export interface ManualProgressLog {
+  id: string;
+  timestamp: string;
+  imageUrl: string;
+  comment: string;
+  aiFeedback?: string;
+  stage: ProjectStage;
+}
+
 export interface AiLogEntry {
     id: string;
     timestamp: string;

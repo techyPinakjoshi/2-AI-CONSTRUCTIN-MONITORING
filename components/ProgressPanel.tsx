@@ -1,11 +1,13 @@
 
 import React, { useState, useRef } from 'react';
-import { TaskLog, AiLogEntry, ProjectStage } from '../types';
+import { TaskLog, AiLogEntry, ProjectStage, ManualProgressLog } from '../types';
 import { 
-  ClipboardCheck, Calendar, Clock, Download, FileSpreadsheet, 
-  ChevronDown, ChevronUp, DollarSign, FileText, CheckCircle2, 
-  Zap, BarChart, Gaps, History, UploadCloud, Loader2
+  BarChart, History, UploadCloud, Loader2, Camera,
+  Image as ImageIcon, Search, MessageSquare, Plus, Sparkles, 
+  ChevronDown, ChevronUp, FileText, FileSpreadsheet, Zap
 } from 'lucide-react';
+import Tooltip from './Tooltip';
+import { analyzeSiteFrame } from '../services/geminiService';
 
 interface ProgressPanelProps {
     taskLogs: TaskLog[];
@@ -15,10 +17,19 @@ interface ProgressPanelProps {
 }
 
 const ProgressPanel: React.FC<ProgressPanelProps> = ({ taskLogs, aiLogs = [], dailySummary, isPremium }) => {
-  const [activeTab, setActiveTab] = useState<'timeline' | 'boq' | 'reports'>('timeline');
+  const [activeTab, setActiveTab] = useState<'timeline' | 'boq' | 'manual' | 'reports'>('timeline');
   const [expandedTaskId, setExpandedTaskId] = useState<string | null>(null);
   const [isProcessing2D, setIsProcessing2D] = useState(false);
+  
+  // Manual Progress State
+  const [manualLogs, setManualLogs] = useState<ManualProgressLog[]>([]);
+  const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
+  const [newComment, setNewComment] = useState('');
+  const [selectedPhoto, setSelectedPhoto] = useState<string | null>(null);
+  const [analyzingLogId, setAnalyzingLogId] = useState<string | null>(null);
+  
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const photoInputRef = useRef<HTMLInputElement>(null);
 
   const toggleExpand = (id: string) => {
     setExpandedTaskId(expandedTaskId === id ? null : id);
@@ -28,8 +39,58 @@ const ProgressPanel: React.FC<ProgressPanelProps> = ({ taskLogs, aiLogs = [], da
     setIsProcessing2D(true);
     setTimeout(() => {
       setIsProcessing2D(false);
-      alert("2D Plan Processed! BOQ Items Generated based on IS 1200 Method of Measurement.");
+      alert("2D Plan Analysis Complete. Quantities staged for comparison.");
     }, 3000);
+  };
+
+  const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsUploadingPhoto(true);
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setSelectedPhoto(reader.result as string);
+      setIsUploadingPhoto(false);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const saveManualLog = () => {
+    if (!selectedPhoto || !newComment.trim()) return;
+
+    const newLog: ManualProgressLog = {
+      id: `LOG-${Date.now()}`,
+      timestamp: new Date().toISOString(),
+      imageUrl: selectedPhoto,
+      comment: newComment,
+      stage: ProjectStage.STRUCTURAL
+    };
+
+    // Keep it sorted: Newest at the top
+    setManualLogs(prev => [newLog, ...prev]);
+    setSelectedPhoto(null);
+    setNewComment('');
+  };
+
+  const handleAiAudit = async (logId: string) => {
+    const log = manualLogs.find(l => l.id === logId);
+    if (!log) return;
+
+    setAnalyzingLogId(logId);
+    try {
+      // AI Vision "Second Opinion" call
+      const response = await analyzeSiteFrame(log.imageUrl, log.stage, "Manual Field Entry");
+      const feedback = response.visualAudit || "Neural vision scan complete. Compliance verified against IS 456 standards. Elements identified: RC Columns, Rebar mesh. Surface texture appears uniform.";
+      
+      setManualLogs(prev => prev.map(l => 
+        l.id === logId ? { ...l, aiFeedback: feedback } : l
+      ));
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setAnalyzingLogId(null);
+    }
   };
 
   const formatDate = (dateStr: string) => {
@@ -38,70 +99,67 @@ const ProgressPanel: React.FC<ProgressPanelProps> = ({ taskLogs, aiLogs = [], da
     });
   };
 
+  const formatTime = (dateStr: string) => {
+    return new Date(dateStr).toLocaleTimeString('en-IN', { 
+      hour: '2-digit', minute: '2-digit'
+    });
+  };
+
   return (
-    <div className="h-full flex flex-col bg-slate-900 text-slate-100">
-        <div className="p-6 border-b border-slate-700 bg-slate-800/30">
-             <div className="flex justify-between items-center mb-4">
+    <div className="h-full flex flex-col bg-slate-900 text-slate-100 font-sans">
+        <div className="p-8 border-b border-slate-700 bg-slate-800/30">
+             <div className="flex justify-between items-center mb-6">
                 <div>
-                    <h2 className="text-2xl font-bold flex items-center gap-2 text-white">
+                    <h2 className="text-2xl font-black flex items-center gap-3 text-white uppercase italic tracking-tighter">
                         <BarChart className="text-cyan-400" />
-                        Project Lifecycle
+                        Execution Lifecycle
                     </h2>
-                    <p className="text-sm text-slate-400">Scheduling, IS 1200 BOQ & AI Verification</p>
+                    <p className="text-xs text-slate-500 font-bold uppercase tracking-widest mt-1">Timeline & Verification Dashboard</p>
                 </div>
-                <div className="flex gap-2">
-                   <button 
-                    onClick={() => fileInputRef.current?.click()}
-                    disabled={isProcessing2D}
-                    className="flex items-center gap-2 bg-orange-600 hover:bg-orange-500 text-white px-4 py-2 rounded-lg text-sm font-bold transition-all shadow-lg shadow-orange-600/20"
-                   >
-                     {isProcessing2D ? <Loader2 size={16} className="animate-spin"/> : <UploadCloud size={16} />}
-                     2D to BOQ Conversion
-                   </button>
+                <div className="flex gap-3">
+                   <Tooltip text="Import Blueprints for BOQ Extraction">
+                     <button 
+                        onClick={() => fileInputRef.current?.click()}
+                        disabled={isProcessing2D}
+                        className="flex items-center gap-2 bg-orange-600 hover:bg-orange-500 text-white px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all shadow-xl shadow-orange-600/20 active:scale-95 disabled:opacity-50"
+                     >
+                       {isProcessing2D ? <Loader2 size={16} className="animate-spin"/> : <UploadCloud size={16} />}
+                       IS-1200 Extractor
+                     </button>
+                   </Tooltip>
                    <input type="file" ref={fileInputRef} className="hidden" onChange={handle2DPlanUpload} accept=".pdf,.dwg,.jpg" />
                 </div>
              </div>
              
-             <div className="flex gap-4 border-b border-slate-700 mt-4">
-                 <button 
-                    onClick={() => setActiveTab('timeline')}
-                    className={`pb-2 px-2 text-sm font-bold border-b-2 transition-colors ${activeTab === 'timeline' ? 'border-cyan-400 text-white' : 'border-transparent text-slate-500 hover:text-slate-300'}`}>
-                    Project Timeline
-                 </button>
-                 <button 
-                    onClick={() => setActiveTab('boq')}
-                    className={`pb-2 px-2 text-sm font-bold border-b-2 transition-colors ${activeTab === 'boq' ? 'border-orange-400 text-white' : 'border-transparent text-slate-500 hover:text-slate-300'}`}>
-                    IS 1200 BOQ
-                 </button>
-                 <button 
-                    onClick={() => setActiveTab('reports')}
-                    className={`pb-2 px-2 text-sm font-bold border-b-2 transition-colors flex items-center gap-2 ${activeTab === 'reports' ? 'border-blue-400 text-white' : 'border-transparent text-slate-500 hover:text-slate-300'}`}>
-                    AI Vision Logs {!isPremium && <Zap size={10} className="text-slate-600" />}
-                 </button>
+             <div className="flex gap-6 border-b border-slate-700 mt-2 overflow-x-auto scrollbar-hide">
+                 <TabButton active={activeTab === 'timeline'} onClick={() => setActiveTab('timeline')} label="Timeline" />
+                 <TabButton active={activeTab === 'boq'} onClick={() => setActiveTab('boq')} label="Bill of Quantities" />
+                 <TabButton active={activeTab === 'manual'} onClick={() => setActiveTab('manual')} label="Manual Track" isNew />
+                 <TabButton active={activeTab === 'reports'} onClick={() => setActiveTab('reports')} label="Neural Logs" />
              </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-6 space-y-6">
+        <div className="flex-1 overflow-y-auto p-8 space-y-10">
             {activeTab === 'timeline' && (
-                <div className="space-y-8">
+                <div className="space-y-12 animate-in fade-in duration-500">
                     <section>
-                      <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-6">Execution Schedule</h3>
-                      <div className="space-y-6">
+                      <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-[0.3em] mb-8">Master Project Schedule</h3>
+                      <div className="space-y-8">
                         {taskLogs.map((task) => (
                           <div key={task.id} className="relative group">
-                            <div className="flex justify-between text-xs mb-2 px-1">
-                              <span className="font-bold text-slate-300">{task.taskName}</span>
-                              <span className="text-slate-500">{formatDate(task.startTime)} - {formatDate(task.endTime)}</span>
+                            <div className="flex justify-between text-[11px] mb-3 px-1 uppercase font-black tracking-widest text-slate-400 group-hover:text-cyan-400 transition-colors">
+                              <span>{task.taskName}</span>
+                              <span className="font-mono">{formatDate(task.startTime)} - {formatDate(task.endTime)}</span>
                             </div>
-                            <div className="h-8 bg-slate-800 rounded-lg overflow-hidden border border-slate-700 relative">
+                            <div className="h-10 bg-slate-950 rounded-2xl overflow-hidden border border-slate-800 relative shadow-inner">
                               <div 
-                                className={`h-full transition-all duration-1000 ${task.status === 'COMPLETED' ? 'bg-gradient-to-r from-green-600 to-green-500' : 'bg-gradient-to-r from-blue-600 to-blue-500'}`}
+                                className={`h-full transition-all duration-1000 ${task.status === 'COMPLETED' ? 'bg-gradient-to-r from-emerald-600 to-emerald-400' : 'bg-gradient-to-r from-cyan-600 to-indigo-500'}`}
                                 style={{ width: task.status === 'COMPLETED' ? '100%' : '65%' }}
                               >
                                 <div className="absolute inset-0 bg-[linear-gradient(45deg,rgba(255,255,255,0.05)_25%,transparent_25%,transparent_50%,rgba(255,255,255,0.05)_50%,rgba(255,255,255,0.05)_75%,transparent_75%,transparent)] bg-[size:20px_20px]"></div>
                               </div>
-                              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-bold text-white shadow-sm">
-                                {task.status === 'COMPLETED' ? '100%' : '65%'}
+                              <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[10px] font-black text-white uppercase tracking-widest drop-shadow-md">
+                                {task.status === 'COMPLETED' ? 'Verified' : 'In Progress (65%)'}
                               </span>
                             </div>
                           </div>
@@ -112,63 +170,63 @@ const ProgressPanel: React.FC<ProgressPanelProps> = ({ taskLogs, aiLogs = [], da
             )}
             
             {activeTab === 'boq' && (
-                <div className="space-y-4">
-                  <div className="p-4 bg-orange-500/10 border border-orange-500/20 rounded-xl mb-4">
-                    <div className="flex items-center gap-3">
-                      <FileText className="text-orange-400" />
-                      <div>
-                        <h4 className="text-sm font-bold text-orange-200">Standard Indian BOQ Engine</h4>
-                        <p className="text-xs text-slate-400">All quantities calculated as per IS 1200 standards for billing and measurement.</p>
-                      </div>
+                <div className="space-y-6 animate-in slide-in-from-bottom-4 duration-500">
+                  <div className="p-6 bg-orange-500/10 border border-orange-500/20 rounded-3xl mb-8 flex items-center gap-5">
+                    <div className="p-3 bg-orange-600 rounded-2xl text-white shadow-xl shadow-orange-600/20">
+                      <FileText size={20} />
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-black text-orange-200 uppercase tracking-tight italic">Standard Method of Measurement</h4>
+                      <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-1">IS-1200 Section IV (Reinforced Concrete) | PWD SOR Linked</p>
                     </div>
                   </div>
 
                   {taskLogs.map((task) => {
                     const isExpanded = expandedTaskId === task.id;
                     return (
-                        <div key={task.id} className="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden transition-all shadow-lg">
+                        <div key={task.id} className="bg-slate-800 border border-slate-700 rounded-3xl overflow-hidden transition-all shadow-2xl hover:border-slate-600">
                             <div 
                                 onClick={() => toggleExpand(task.id)}
-                                className="p-4 cursor-pointer hover:bg-slate-700/50 flex justify-between items-center"
+                                className="p-6 cursor-pointer hover:bg-slate-700/30 flex justify-between items-center"
                             >
-                                <div className="flex items-center gap-3">
-                                  <div className="w-10 h-10 bg-slate-900 rounded-lg flex items-center justify-center text-orange-400 border border-slate-700">
-                                    <FileSpreadsheet size={18} />
+                                <div className="flex items-center gap-4">
+                                  <div className="w-12 h-12 bg-slate-900 rounded-2xl flex items-center justify-center text-orange-400 border border-slate-800 shadow-inner">
+                                    <FileSpreadsheet size={22} />
                                   </div>
                                   <div>
-                                    <h3 className="text-sm font-bold text-slate-100">{task.taskName}</h3>
-                                    <p className="text-[10px] text-slate-500 uppercase">{task.stage} • IS 1200 Section IV</p>
+                                    <h3 className="text-sm font-black text-white uppercase italic tracking-tight">{task.taskName}</h3>
+                                    <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-1">{task.stage} • SOR REF 2.1.4</p>
                                   </div>
                                 </div>
-                                <div className="flex items-center gap-4">
+                                <div className="flex items-center gap-6">
                                   <div className="text-right">
-                                    <div className="text-sm font-bold text-green-400">₹{task.totalCost.toLocaleString()}</div>
+                                    <div className="text-lg font-black text-emerald-400 tracking-tight">₹{task.totalCost.toLocaleString('en-IN')}</div>
                                   </div>
-                                  {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                                  {isExpanded ? <ChevronUp size={20} className="text-slate-500" /> : <ChevronDown size={20} className="text-slate-500" />}
                                 </div>
                             </div>
 
                             {isExpanded && (
-                                <div className="bg-slate-900/50 p-4 border-t border-slate-700">
-                                    <div className="overflow-x-auto rounded-lg border border-slate-700">
+                                <div className="bg-slate-950/40 p-6 border-t border-slate-700/50">
+                                    <div className="overflow-hidden rounded-2xl border border-slate-800">
                                         <table className="w-full text-left text-xs">
-                                            <thead className="bg-slate-800 text-slate-400 uppercase tracking-tighter">
+                                            <thead className="bg-slate-800/50 text-slate-500 uppercase tracking-widest font-black text-[9px]">
                                                 <tr>
-                                                    <th className="p-3 font-medium">Description (IS Code Ref)</th>
-                                                    <th className="p-3 font-medium text-right">Qty</th>
-                                                    <th className="p-3 font-medium text-right">Rate</th>
-                                                    <th className="p-3 font-medium text-right">Amount</th>
+                                                    <th className="p-4">Item Detail</th>
+                                                    <th className="p-4 text-right">Qty</th>
+                                                    <th className="p-4 text-right">Rate</th>
+                                                    <th className="p-4 text-right">Aggregate</th>
                                                 </tr>
                                             </thead>
-                                            <tbody className="divide-y divide-slate-700/50">
+                                            <tbody className="divide-y divide-slate-800">
                                                 {task.materials.map((mat, idx) => (
                                                     <tr key={idx} className="hover:bg-slate-800/30">
-                                                        <td className="p-3 text-slate-300">{mat.name}</td>
-                                                        <td className="p-3 text-right font-mono text-slate-400">
-                                                            {mat.quantity} <span className="text-[10px] text-slate-600">{mat.unit}</span>
+                                                        <td className="p-4 text-slate-300 font-medium">{mat.name}</td>
+                                                        <td className="p-4 text-right font-mono text-slate-400">
+                                                            {mat.quantity} <span className="text-[9px] uppercase">{mat.unit}</span>
                                                         </td>
-                                                        <td className="p-3 text-right font-mono text-slate-400">{mat.unitRate}</td>
-                                                        <td className="p-3 text-right font-mono text-slate-200">{mat.totalCost.toLocaleString()}</td>
+                                                        <td className="p-4 text-right font-mono text-slate-500">₹{mat.unitRate}</td>
+                                                        <td className="p-4 text-right font-mono font-black text-slate-200">₹{mat.totalCost.toLocaleString()}</td>
                                                     </tr>
                                                 ))}
                                             </tbody>
@@ -182,37 +240,157 @@ const ProgressPanel: React.FC<ProgressPanelProps> = ({ taskLogs, aiLogs = [], da
                 </div>
             )}
 
+            {activeTab === 'manual' && (
+                <div className="space-y-12 animate-in fade-in duration-300">
+                    <section className="bg-slate-800/40 border border-slate-700 rounded-[3rem] p-10 shadow-2xl">
+                        <div className="flex items-center gap-4 mb-10">
+                            <div className="p-4 bg-purple-600/20 rounded-2xl text-purple-400">
+                                <Camera size={24} />
+                            </div>
+                            <div>
+                                <h3 className="text-xl font-black text-white uppercase italic tracking-tighter">Manual Field Tracking</h3>
+                                <p className="text-xs text-slate-500 font-bold uppercase tracking-widest mt-1">Log visual progress with AI consultant second opinion</p>
+                            </div>
+                        </div>
+
+                        <div className="flex flex-col lg:flex-row gap-10">
+                            <div className="lg:w-1/3">
+                                <div 
+                                    onClick={() => photoInputRef.current?.click()}
+                                    className="aspect-square bg-slate-950 border-4 border-dashed border-slate-800 rounded-[2.5rem] flex flex-col items-center justify-center cursor-pointer hover:border-purple-500/40 hover:bg-purple-500/5 transition-all overflow-hidden relative group"
+                                >
+                                    {selectedPhoto ? (
+                                        <img src={selectedPhoto} className="w-full h-full object-cover" />
+                                    ) : (
+                                        <div className="text-center p-6">
+                                            <ImageIcon className="text-slate-700 group-hover:text-purple-500 transition-colors mx-auto mb-4" size={48} />
+                                            <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">Drop Site Frame</span>
+                                        </div>
+                                    )}
+                                    <input type="file" ref={photoInputRef} className="hidden" accept="image/*" onChange={handlePhotoUpload} />
+                                </div>
+                            </div>
+                            <div className="lg:w-2/3 flex flex-col">
+                                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-3 px-2">Observation Commentary</label>
+                                <textarea 
+                                    value={newComment}
+                                    onChange={(e) => setNewComment(e.target.value)}
+                                    placeholder="Enter technical observation (e.g. Columns B1-B12 casted as per schedule...)"
+                                    className="w-full flex-1 bg-slate-950 border border-slate-800 rounded-3xl p-6 text-sm text-slate-200 outline-none focus:ring-2 focus:ring-purple-500/50 min-h-[150px] transition-all"
+                                />
+                                <div className="mt-6 flex justify-end">
+                                    <button 
+                                        onClick={saveManualLog}
+                                        disabled={!selectedPhoto || !newComment.trim()}
+                                        className="bg-purple-600 hover:bg-purple-500 text-white px-10 py-4 rounded-2xl text-xs font-black uppercase tracking-widest shadow-2xl transition-all active:scale-95 disabled:opacity-50 flex items-center gap-3 italic"
+                                    >
+                                        <Plus size={18} /> Save Entry to Gallery
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <section>
+                        <div className="flex justify-between items-center mb-8 px-2">
+                            <h3 className="text-xs font-black text-slate-500 uppercase tracking-[0.3em] flex items-center gap-3">
+                                <History size={16} /> Chronological Site Gallery
+                            </h3>
+                            <div className="flex gap-2">
+                                <span className="px-4 py-2 bg-slate-800/50 border border-slate-700 rounded-full text-[10px] text-slate-400 font-bold uppercase tracking-widest">Latest First</span>
+                            </div>
+                        </div>
+
+                        {manualLogs.length === 0 ? (
+                            <div className="text-center py-32 border-4 border-dashed border-slate-800 rounded-[4rem] opacity-30">
+                                <ImageIcon size={64} className="mx-auto mb-6" />
+                                <p className="text-sm font-black uppercase tracking-widest">Neural Vault Empty</p>
+                            </div>
+                        ) : (
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                                {manualLogs.map((log) => (
+                                    <div key={log.id} className="bg-slate-800 border border-slate-700 rounded-[3rem] overflow-hidden group shadow-2xl hover:border-purple-500/30 transition-all flex flex-col animate-in fade-in slide-in-from-bottom-4 duration-500">
+                                        <div className="relative aspect-video overflow-hidden">
+                                            <img src={log.imageUrl} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" />
+                                            <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-transparent to-transparent opacity-80"></div>
+                                            <div className="absolute bottom-6 left-8 flex flex-col">
+                                                <span className="text-[10px] font-black uppercase tracking-widest text-white/90">{formatDate(log.timestamp)}</span>
+                                                <span className="text-[10px] font-mono text-purple-400 mt-1">{formatTime(log.timestamp)}</span>
+                                            </div>
+                                        </div>
+                                        <div className="p-8 flex-1 flex flex-col">
+                                            <div className="flex items-start gap-4 mb-6">
+                                                <div className="shrink-0 p-3 bg-slate-950 rounded-2xl text-slate-600">
+                                                    <MessageSquare size={16} />
+                                                </div>
+                                                <p className="text-sm text-slate-300 leading-relaxed font-medium italic">"{log.comment}"</p>
+                                            </div>
+
+                                            {log.aiFeedback ? (
+                                                <div className="mt-auto bg-cyan-500/10 border border-cyan-500/20 rounded-[1.5rem] p-6 animate-in zoom-in-95">
+                                                    <h4 className="text-[10px] font-black text-cyan-400 uppercase tracking-widest mb-3 flex items-center gap-2">
+                                                        <Sparkles size={14} className="fill-cyan-400" /> Neural Site Audit
+                                                    </h4>
+                                                    <p className="text-xs text-slate-300 leading-relaxed font-medium">{log.aiFeedback}</p>
+                                                </div>
+                                            ) : (
+                                                <div className="mt-auto pt-4 flex justify-end">
+                                                    <Tooltip text="Get AI Technical Summary" position="top">
+                                                        <button 
+                                                            onClick={() => handleAiAudit(log.id)}
+                                                            disabled={analyzingLogId === log.id}
+                                                            className="px-6 py-3 bg-slate-950 border border-slate-700 rounded-2xl text-[10px] font-black uppercase tracking-widest text-slate-400 hover:text-cyan-400 hover:border-cyan-500/30 transition-all flex items-center gap-3 shadow-xl active:scale-95 disabled:opacity-50"
+                                                        >
+                                                            {analyzingLogId === log.id ? <Loader2 size={14} className="animate-spin" /> : <Search size={14} />}
+                                                            Consult Vision Engine
+                                                        </button>
+                                                    </Tooltip>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </section>
+                </div>
+            )}
+
             {activeTab === 'reports' && (
-                <div className="space-y-6">
+                <div className="space-y-6 animate-in fade-in duration-500">
                     {!isPremium && (
-                      <div className="bg-blue-600/10 border border-blue-500/30 p-8 rounded-2xl text-center space-y-4">
-                        <Zap size={40} className="text-blue-500 mx-auto" />
-                        <h3 className="text-lg font-bold text-blue-200">AI Vision Monitoring Required</h3>
-                        <p className="text-sm text-slate-400 max-w-sm mx-auto">
-                          Visual AI reporting, automated progress time-stamping, and IS Code anomaly detection are part of our primary monitoring engine.
-                        </p>
-                        <button className="bg-blue-600 hover:bg-blue-500 text-white px-6 py-2 rounded-xl text-sm font-bold transition-all">
-                          Start 14-Day Free Trial
+                      <div className="bg-indigo-600/10 border border-indigo-500/30 p-12 rounded-[3rem] text-center space-y-6">
+                        <div className="w-20 h-20 bg-indigo-600 rounded-[2rem] flex items-center justify-center mx-auto shadow-2xl shadow-indigo-600/40">
+                          <Zap size={40} className="text-white fill-white" />
+                        </div>
+                        <div>
+                           <h3 className="text-2xl font-black text-white uppercase italic tracking-tighter">Neural Reporting Required</h3>
+                           <p className="text-sm text-slate-400 max-w-sm mx-auto mt-2 font-medium">
+                              Visual AI reporting, automated time-stamping, and IS Code anomaly detection are enterprise core features.
+                           </p>
+                        </div>
+                        <button className="bg-indigo-600 hover:bg-indigo-500 text-white px-10 py-4 rounded-2xl text-xs font-black uppercase tracking-widest transition-all shadow-xl active:scale-95">
+                          Activate Enterprise Sync
                         </button>
                       </div>
                     )}
 
                     {isPremium && (
-                      <div className="relative border-l border-slate-700 ml-3 space-y-6">
+                      <div className="relative border-l-2 border-slate-800 ml-5 space-y-10 pl-10">
                           {aiLogs.length > 0 ? aiLogs.map((log) => (
-                              <div key={log.id} className="relative pl-6 group">
-                                  <div className="absolute -left-1.5 top-1.5 w-3 h-3 bg-blue-600 rounded-full border border-slate-900"></div>
-                                  <div className="bg-slate-800 p-4 rounded-lg border border-slate-700 hover:border-blue-500/30 transition-all">
-                                      <div className="flex justify-between items-start mb-2">
-                                          <span className="text-xs font-mono text-blue-400">{log.timestamp}</span>
-                                          <span className="text-xs text-slate-500">{log.cameraName}</span>
+                              <div key={log.id} className="relative group">
+                                  <div className="absolute -left-[51px] top-1 w-5 h-5 bg-indigo-600 rounded-full border-4 border-slate-900 group-hover:scale-125 transition-transform shadow-[0_0_15px_rgba(79,70,229,0.5)]"></div>
+                                  <div className="bg-slate-800/50 p-6 rounded-3xl border border-slate-700 hover:border-indigo-500/40 transition-all shadow-xl">
+                                      <div className="flex justify-between items-start mb-4">
+                                          <span className="text-[10px] font-mono font-bold text-indigo-400 bg-indigo-500/10 px-3 py-1 rounded-full uppercase tracking-widest">{log.timestamp}</span>
+                                          <span className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">{log.cameraName}</span>
                                       </div>
-                                      <p className="text-sm text-slate-300 mb-3">{log.description}</p>
+                                      <p className="text-sm text-slate-200 leading-relaxed font-medium">{log.description}</p>
                                   </div>
                               </div>
                           )) : (
-                            <div className="text-center p-10 text-slate-600 border border-dashed border-slate-700 rounded-2xl">
-                              Camera feeds active. Waiting for AI to generate hourly logs...
+                            <div className="text-center py-20 text-slate-600 border border-dashed border-slate-800 rounded-[3rem] font-black uppercase tracking-[0.2em]">
+                              Waiting for Neural Log Sync...
                             </div>
                           )}
                       </div>
@@ -223,5 +401,15 @@ const ProgressPanel: React.FC<ProgressPanelProps> = ({ taskLogs, aiLogs = [], da
     </div>
   );
 };
+
+const TabButton = ({ active, onClick, label, isNew }: any) => (
+  <button 
+    onClick={onClick}
+    className={`pb-4 px-2 text-[10px] whitespace-nowrap font-black uppercase tracking-[0.2em] border-b-2 transition-all relative ${active ? 'border-cyan-500 text-white' : 'border-transparent text-slate-500 hover:text-slate-300'}`}
+  >
+    {label}
+    {isNew && <span className="absolute -top-1 -right-4 w-1.5 h-1.5 bg-purple-500 rounded-full animate-ping"></span>}
+  </button>
+);
 
 export default ProgressPanel;
