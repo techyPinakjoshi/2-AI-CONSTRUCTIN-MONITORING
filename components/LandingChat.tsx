@@ -64,7 +64,7 @@ const LandingChat: React.FC<any> = ({ onAuthRequired, onEnterApp, onOpenBoqDashb
   return (
     <div className="flex h-screen bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100 overflow-hidden font-sans relative">
       
-      {/* SIDEBAR */}
+      {/* FIXED SIDEBAR */}
       <aside className="hidden lg:flex w-64 bg-white dark:bg-slate-900 border-r border-zinc-200 dark:border-white/5 flex-col p-6 overflow-y-auto shrink-0 z-50 shadow-2xl relative">
         <div className="mb-10 flex items-center gap-3">
           <div className="p-2.5 bg-gradient-to-br from-cyan-500 to-indigo-600 rounded-xl shadow-lg">
@@ -94,18 +94,17 @@ const LandingChat: React.FC<any> = ({ onAuthRequired, onEnterApp, onOpenBoqDashb
         </div>
       </aside>
 
-      {/* Main Container - Adjusted to center-aligned flex-col */}
+      {/* Main Container - Centered Alignment for Branding Symmetry */}
       <main className="flex-1 flex flex-col items-center justify-center p-4 md:p-6 transition-all duration-700 relative overflow-y-auto pt-20">
         
-        {/* WEAUTOMATES LOGO - Placed inside main content flow but absolute-top to ensure symmetry with greeting */}
-        <div className="flex flex-col items-center w-full max-w-2xl mb-12">
-            <span className="text-4xl md:text-5xl font-black uppercase tracking-[0.6em] bg-clip-text text-transparent bg-gradient-to-r from-cyan-400 via-fuchsia-500 to-amber-500 drop-shadow-[0_0_25px_rgba(244,63,94,0.7)] animate-pulse-slow mb-8 transition-all">
+        {/* SYMMETRICAL BRANDING GROUP */}
+        <div className="flex flex-col items-center w-full max-w-2xl mb-12 text-center">
+            <span className="text-4xl md:text-5xl font-black uppercase tracking-[0.6em] bg-clip-text text-transparent bg-gradient-to-r from-cyan-400 via-fuchsia-500 to-amber-500 drop-shadow-[0_0_25px_rgba(244,63,94,0.7)] animate-pulse-slow mb-8">
               WEAUTOMATES
             </span>
             
-            {/* Greeting Group - Directly under the logo */}
-            <div className={`text-center transition-all duration-500 ${messages.length > 0 ? 'mb-4' : 'mb-0'}`}>
-               <h1 className="text-xl md:text-3xl font-black text-slate-900 dark:text-white tracking-tight leading-snug px-4 drop-shadow-sm">
+            <div className={`transition-all duration-500 ${messages.length > 0 ? 'mb-4' : 'mb-0'}`}>
+               <h1 className="text-xl md:text-3xl font-black text-slate-900 dark:text-white tracking-tight leading-snug px-4">
                  Welcome! I’m your Construction AI Assistant. How can I help you monitor, analyze, or manage your project today?
                </h1>
             </div>
@@ -127,9 +126,6 @@ const LandingChat: React.FC<any> = ({ onAuthRequired, onEnterApp, onOpenBoqDashb
                             }`}>
                                 {m.content}
                             </div>
-                            {m.imageUrl && (
-                                <img src={m.imageUrl} className="rounded-xl border border-zinc-200 dark:border-white/10 shadow-lg max-w-[200px]" alt="Technical Ref" />
-                            )}
                         </div>
                     </div>
                 ))}
@@ -144,27 +140,23 @@ const LandingChat: React.FC<any> = ({ onAuthRequired, onEnterApp, onOpenBoqDashb
             </div>
         </div>
 
-        {/* Minimal Pill Input */}
+        {/* Search Bar Input */}
         <div className="w-full max-w-2xl px-4">
             <form onSubmit={handleSend} className="relative group">
                 <div className="absolute left-4 top-1/2 -translate-y-1/2 flex items-center gap-2">
                    <button type="button" className="text-slate-400 hover:text-slate-600 dark:hover:text-white transition-colors">
                       <Plus size={18} />
                    </button>
-                   <div className="w-px h-4 bg-slate-200 dark:bg-slate-800"></div>
                 </div>
                 
                 <input 
                     value={input}
                     onChange={(e) => setInput(e.target.value)}
-                    placeholder="Ask about IS codes, site progress, or project analytics..."
-                    className="w-full bg-white dark:bg-slate-900 border border-zinc-200 dark:border-white/10 rounded-full pl-14 pr-24 py-4 text-[14px] text-slate-900 dark:text-white outline-none focus:ring-4 focus:ring-cyan-500/10 transition-all shadow-xl font-medium placeholder:text-slate-400"
+                    placeholder="Ask about IS codes or site progress..."
+                    className="w-full bg-white dark:bg-slate-900 border border-zinc-200 dark:border-white/10 rounded-full pl-12 pr-24 py-4 text-[14px] text-slate-900 dark:text-white outline-none focus:ring-4 focus:ring-cyan-500/10 transition-all shadow-xl font-medium"
                 />
 
                 <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2">
-                    <button type="button" className="text-slate-400 hover:text-slate-600 dark:hover:text-white transition-colors">
-                       <Mic size={16} />
-                    </button>
                     <button 
                         type="submit" 
                         disabled={!input.trim() || isTyping}
@@ -175,7 +167,6 @@ const LandingChat: React.FC<any> = ({ onAuthRequired, onEnterApp, onOpenBoqDashb
                 </div>
             </form>
             
-            {/* Quick Chips */}
             <div className="flex flex-wrap justify-center gap-2 mt-4 opacity-60 hover:opacity-100 transition-opacity pb-8">
                {CATEGORIES.map(cat => (
                   <button 
@@ -190,22 +181,22 @@ const LandingChat: React.FC<any> = ({ onAuthRequired, onEnterApp, onOpenBoqDashb
             </div>
         </div>
 
-        {/* 2D PLAN TO boq ACTION */}
+        {/* REFINED 2D PLAN TO boq ACTION */}
         {!messages.length && (
           <div className="mt-4 w-full max-w-2xl animate-in slide-in-from-bottom-4 duration-1000">
              <button 
                 onClick={onOpenBoqDashboard}
-                className="w-full group relative overflow-hidden bg-white dark:bg-slate-900 border-2 border-slate-200 dark:border-white/10 p-6 rounded-[2rem] flex items-center justify-between shadow-2xl transition-all hover:border-fuchsia-500/50 hover:scale-[1.01] active:scale-95"
+                className="w-full group relative overflow-hidden bg-white dark:bg-slate-900 border-2 border-slate-200 dark:border-white/10 p-8 rounded-[2rem] flex items-center justify-between shadow-2xl transition-all hover:border-fuchsia-500/50 hover:scale-[1.01] active:scale-95"
              >
                 <div className="absolute top-0 right-0 p-4 opacity-[0.03] group-hover:opacity-[0.08] transition-opacity duration-700">
                    <Calculator size={100} className="text-fuchsia-500" />
                 </div>
-                <div className="relative z-10 flex items-center gap-6">
-                   <div className="p-4 bg-gradient-to-br from-cyan-400 via-fuchsia-500 to-amber-500 rounded-2xl shadow-xl shadow-fuchsia-500/20 text-white">
-                      <Calculator size={28} />
+                <div className="relative z-10 flex items-center gap-8">
+                   <div className="p-5 bg-gradient-to-br from-cyan-400 via-fuchsia-500 to-amber-500 rounded-2xl shadow-xl shadow-fuchsia-500/20 text-white">
+                      <Calculator size={32} />
                    </div>
                    <div className="text-left">
-                      <h3 className="text-2xl font-black text-slate-900 dark:text-white uppercase italic tracking-tighter leading-none">2D PLAN TO boq</h3>
+                      <h3 className="text-3xl font-black text-slate-900 dark:text-white uppercase italic tracking-tighter leading-none">2D PLAN TO boq</h3>
                    </div>
                 </div>
                 <div className="relative z-10 w-12 h-12 bg-slate-100 dark:bg-white/5 rounded-full flex items-center justify-center text-slate-900 dark:text-white group-hover:bg-fuchsia-500 group-hover:text-white group-hover:translate-x-2 transition-all">
