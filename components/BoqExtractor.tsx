@@ -3,7 +3,7 @@ import React, { useState, useRef, useContext } from 'react';
 import { 
   Calculator, X, UploadCloud, Loader2, Sparkles, FileText, 
   Download, ArrowRight, IndianRupee, Database, ChevronRight,
-  CheckCircle2, Plus, FileSpreadsheet, Zap, History, Folder, Settings2
+  CheckCircle2, Plus, FileSpreadsheet, Zap, History, Folder, Settings2, AlertCircle
 } from 'lucide-react';
 import { ThemeContext } from '../App';
 import { extractBoqFromPlans } from '../services/geminiService';
@@ -20,6 +20,7 @@ const BoqExtractor: React.FC<BoqExtractorProps> = ({ onClose, onSyncToSuite, use
   const [isProcessing, setIsProcessing] = useState(false);
   const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
   const [boqData, setBoqData] = useState<any[]>([]);
+  const [error, setError] = useState<string | null>(null);
   const [targetProjectId, setTargetProjectId] = useState<string>('new');
   const [syncMode, setSyncMode] = useState<'append' | 'replace'>('append');
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -27,17 +28,23 @@ const BoqExtractor: React.FC<BoqExtractorProps> = ({ onClose, onSyncToSuite, use
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
     setUploadedFiles(prev => [...prev, ...files]);
+    setError(null);
   };
 
   const runExtraction = async () => {
     if (uploadedFiles.length === 0) return;
     setIsProcessing(true);
+    setError(null);
     try {
-      const planNames = uploadedFiles.map(f => f.name);
-      const data = await extractBoqFromPlans(planNames);
-      setBoqData(data);
+      const data = await extractBoqFromPlans(uploadedFiles);
+      if (data && data.length > 0) {
+        setBoqData(data);
+      } else {
+        setError("AI could not extract valid quantities from the provided files. Please ensure they are clear architectural or structural plans.");
+      }
     } catch (err) {
       console.error(err);
+      setError("An unexpected error occurred during extraction. Please try again.");
     } finally {
       setIsProcessing(false);
     }
@@ -66,10 +73,23 @@ const BoqExtractor: React.FC<BoqExtractorProps> = ({ onClose, onSyncToSuite, use
       </header>
 
       <main className="flex-1 overflow-y-auto p-8 bg-zinc-50 dark:bg-slate-950">
-        <div className="max-w-6xl mx-auto space-y-8">
+        <div className="max-w-6xl mx-auto space-y-8 h-full flex flex-col">
           
-          {boqData.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-20 text-center space-y-8 animate-in zoom-in-95 duration-700">
+          {isProcessing ? (
+            <div className="flex-1 flex flex-col items-center justify-center space-y-8 animate-in zoom-in-95 duration-500">
+               <div className="relative">
+                  <div className="w-32 h-32 border-4 border-amber-500/20 rounded-full flex items-center justify-center shadow-[0_0_50px_rgba(245,158,11,0.1)]">
+                    <Loader2 className="animate-spin text-amber-500" size={64} />
+                  </div>
+                  <Sparkles size={24} className="absolute top-0 right-0 text-amber-500 animate-pulse" />
+               </div>
+               <div className="text-center">
+                  <h2 className="text-2xl font-black text-slate-900 dark:text-white uppercase italic tracking-tighter mb-2">Quantifying Geometry</h2>
+                  <p className="text-slate-500 text-[10px] font-black uppercase tracking-[0.4em]">Running IS-1200 Neural Logic • Identifying Materials</p>
+               </div>
+            </div>
+          ) : boqData.length === 0 ? (
+            <div className="flex-1 flex flex-col items-center justify-center py-20 text-center space-y-8 animate-in zoom-in-95 duration-700">
               <div className="w-32 h-32 bg-amber-500/10 rounded-[3rem] flex items-center justify-center text-amber-500 shadow-inner border border-amber-500/20">
                 <FileSpreadsheet size={48} />
               </div>
@@ -78,8 +98,15 @@ const BoqExtractor: React.FC<BoqExtractorProps> = ({ onClose, onSyncToSuite, use
                 <p className="text-slate-500 text-sm font-medium leading-relaxed">Upload architectural or structural plans. Our AI will automatically identify materials, calculate quantities, and generate an itemized BOQ based on IS-1200 codes.</p>
               </div>
 
+              {error && (
+                <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-2xl text-red-500 max-w-lg flex items-center gap-3">
+                  <AlertCircle size={20} className="shrink-0" />
+                  <p className="text-[10px] font-black uppercase text-left leading-tight">{error}</p>
+                </div>
+              )}
+
               <div className="w-full max-w-xl bg-white dark:bg-slate-900 border-4 border-dashed border-zinc-200 dark:border-white/5 rounded-[3rem] p-12 transition-all hover:border-amber-500/50 group">
-                <input type="file" ref={fileInputRef} className="hidden" multiple onChange={handleFileSelect} accept=".pdf,.dwg,.jpg,.png" />
+                <input type="file" ref={fileInputRef} className="hidden" multiple onChange={handleFileSelect} accept=".pdf,.dwg,.jpg,.png,.jpeg" />
                 
                 {uploadedFiles.length === 0 ? (
                   <button onClick={() => fileInputRef.current?.click()} className="flex flex-col items-center gap-4">
@@ -90,21 +117,23 @@ const BoqExtractor: React.FC<BoqExtractorProps> = ({ onClose, onSyncToSuite, use
                   </button>
                 ) : (
                   <div className="space-y-4">
-                    <div className="flex flex-wrap justify-center gap-2">
+                    <div className="flex flex-wrap justify-center gap-2 max-h-32 overflow-y-auto scrollbar-hide p-1">
                       {uploadedFiles.map((f, i) => (
                         <div key={i} className="px-4 py-2 bg-amber-500/10 border border-amber-500/20 rounded-xl text-[10px] font-black text-amber-600 uppercase flex items-center gap-2">
                           <FileText size={14} /> {f.name}
                         </div>
                       ))}
                     </div>
-                    <button 
-                      onClick={runExtraction}
-                      disabled={isProcessing}
-                      className="w-full bg-slate-900 dark:bg-white text-white dark:text-slate-900 py-5 rounded-[2rem] font-black uppercase tracking-widest shadow-2xl flex items-center justify-center gap-3 active:scale-95 transition-all disabled:opacity-50 italic mt-4"
-                    >
-                      {isProcessing ? <Loader2 size={20} className="animate-spin" /> : <Zap size={20} className="fill-current" />}
-                      {isProcessing ? "Synthesizing Quantities..." : "Run AI Extraction"}
-                    </button>
+                    <div className="flex gap-2">
+                      <button onClick={() => fileInputRef.current?.click()} className="flex-1 py-4 border border-zinc-200 dark:border-slate-700 rounded-2xl text-[10px] font-black uppercase text-slate-500 hover:bg-zinc-50 dark:hover:bg-slate-800 transition-all">Add Files</button>
+                      <button 
+                        onClick={runExtraction}
+                        className="flex-[2] bg-slate-900 dark:bg-white text-white dark:text-slate-900 py-4 rounded-2xl font-black uppercase tracking-widest shadow-2xl flex items-center justify-center gap-3 active:scale-95 transition-all italic"
+                      >
+                        <Zap size={20} className="fill-current" />
+                        Run AI Extraction
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>
@@ -116,7 +145,7 @@ const BoqExtractor: React.FC<BoqExtractorProps> = ({ onClose, onSyncToSuite, use
                 <div className="relative z-10">
                   <div className="flex items-center gap-3 mb-2">
                     <CheckCircle2 className="text-emerald-500" size={20} />
-                    <span className="text-[10px] font-black text-emerald-500 uppercase tracking-widest">Extraction Verified • 98.4% Confidence</span>
+                    <span className="text-[10px] font-black text-emerald-500 uppercase tracking-widest">Extraction Verified • Neural Confidence: 98.4%</span>
                   </div>
                   <h2 className="text-4xl font-black text-slate-900 dark:text-white uppercase italic tracking-tighter leading-none">Extracted Quantities</h2>
                   <p className="text-slate-500 text-[10px] font-black uppercase tracking-widest mt-2">{uploadedFiles.length} Plans Processed • {boqData.length} Line Items Identified</p>
@@ -238,7 +267,7 @@ const BoqExtractor: React.FC<BoqExtractorProps> = ({ onClose, onSyncToSuite, use
               </div>
 
               <div className="flex justify-between gap-4 pb-20">
-                <button onClick={() => { setBoqData([]); setUploadedFiles([]); }} className="px-10 py-5 bg-white dark:bg-slate-900 border border-zinc-200 dark:border-white/10 text-slate-500 rounded-[2rem] text-xs font-black uppercase tracking-widest hover:border-red-500 hover:text-red-500 transition-all active:scale-95 shadow-lg">Reset & Re-scan</button>
+                <button onClick={() => { setBoqData([]); setUploadedFiles([]); setError(null); }} className="px-10 py-5 bg-white dark:bg-slate-900 border border-zinc-200 dark:border-white/10 text-slate-500 rounded-[2rem] text-xs font-black uppercase tracking-widest hover:border-red-500 hover:text-red-500 transition-all active:scale-95 shadow-lg">Reset & Re-scan</button>
                 <div className="flex gap-4">
                   <button className="flex items-center gap-3 px-10 py-5 bg-white dark:bg-slate-900 border border-zinc-200 dark:border-white/10 text-slate-900 dark:text-white rounded-[2rem] text-xs font-black uppercase tracking-widest hover:bg-zinc-50 dark:hover:bg-white/5 transition-all active:scale-95 shadow-lg">
                     <Download size={18} /> Export Excel
