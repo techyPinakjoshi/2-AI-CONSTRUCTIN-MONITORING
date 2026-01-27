@@ -2,18 +2,12 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { ProjectStage } from "../types";
 
-/**
- * Safely obtains the Gemini API client.
- */
 const getAiClient = () => {
   const apiKey = process.env.API_KEY;
   if (!apiKey) return null;
   return new GoogleGenAI({ apiKey });
 };
 
-/**
- * Helper to convert File to base64
- */
 const fileToDataPart = async (file: File) => {
   return new Promise((resolve) => {
     const reader = new FileReader();
@@ -31,86 +25,86 @@ const fileToDataPart = async (file: File) => {
 };
 
 /**
- * Extracts a unified BOQ from multiple uploaded construction plans.
- * Enforces strict PWD SOR 2025-2026 pricing.
+ * Extracts a unified BOQ from construction plans using Market Benchmarks.
+ * Fixes the scaling issue where Cr projects were shown as Lacs.
  */
 export const extractBoqFromPlans = async (files: File[]) => {
   try {
     const ai = getAiClient();
     
-    // Improved Fallback with unique seeding to prevent "same data" feeling
     if (!ai) {
-      console.warn("Using simulated PWD 2025-26 BOQ data (API_KEY not found)");
-      const timeSeed = Date.now() % 1000;
-      const fileSeed = files.reduce((acc, f) => acc + f.name.length + f.size, 0) % 1000;
-      const finalSeed = (timeSeed + fileSeed) / 20;
+      console.warn("Using simulated Market Benchmark data (API_KEY not found)");
+      // Generate a seed that reflects a 'Crore' scale project (₹1.5Cr - ₹3.5Cr)
+      const fileHash = files.reduce((acc, f) => acc + f.name.length + f.size, 0);
+      const projectScaleSqFt = 5000 + (fileHash % 10000); // 5k to 15k sqft
+      const marketRatePerSqFt = 2400 + (fileHash % 400); // ₹2400 - ₹2800
+      const totalTarget = projectScaleSqFt * marketRatePerSqFt;
 
       return [
         { 
-          id: `EXT-${Math.floor(finalSeed)}`, 
-          code: "2.1.1", 
-          category: "Excavation", 
-          description: `Earthwork in excavation by mechanical means in all types of soil as per PWD SOR 2025-26 (Ver ${finalSeed.toFixed(0)})`, 
-          qty: 350 + finalSeed, 
-          unit: "cum", 
-          rate: 148.50 + (finalSeed / 10), 
-          amount: (350 + finalSeed) * (148.50 + (finalSeed / 10)) 
+          id: `MKT-${fileHash % 1000}`, 
+          code: "STR-001", 
+          category: "Civil & Structural", 
+          description: `RCC Framework for approx ${projectScaleSqFt.toLocaleString()} sq.ft. BUA including Footings, Columns, and Slabs at Market Rate.`, 
+          qty: projectScaleSqFt, 
+          unit: "sqft", 
+          rate: marketRatePerSqFt * 0.45, // Civil usually 45% of total
+          amount: totalTarget * 0.45 
         },
         { 
-          id: `EXT-${Math.floor(finalSeed + 1)}`, 
-          code: "4.1.2", 
-          category: "Concrete", 
-          description: "PCC 1:4:8 for foundation base (M10) using 40mm metal as per PWD SOR 2025-26", 
-          qty: 15 + (finalSeed / 50), 
-          unit: "cum", 
-          rate: 4920 + finalSeed, 
-          amount: (15 + (finalSeed / 50)) * (4920 + finalSeed) 
+          id: `MKT-${(fileHash % 1000) + 1}`, 
+          code: "FIN-001", 
+          category: "Finishing & MEP", 
+          description: "Internal tiling, Plumbing, and Electrical rough-ins as per luxury benchmarks.", 
+          qty: projectScaleSqFt, 
+          unit: "sqft", 
+          rate: marketRatePerSqFt * 0.35, 
+          amount: totalTarget * 0.35 
         },
         { 
-          id: `EXT-${Math.floor(finalSeed + 2)}`, 
-          code: "5.2.1", 
-          category: "Reinforcement", 
-          description: "TMT bars Fe 500D (12mm and above) including cutting/bending as per PWD SOR 2025-26", 
-          qty: 900 + (finalSeed * 2), 
-          unit: "kg", 
-          rate: 71.25, 
-          amount: (900 + (finalSeed * 2)) * 71.25 
+          id: `MKT-${(fileHash % 1000) + 2}`, 
+          code: "EXT-001", 
+          category: "External Works", 
+          description: "Facade glazing and external development works.", 
+          qty: projectScaleSqFt, 
+          unit: "sqft", 
+          rate: marketRatePerSqFt * 0.20, 
+          amount: totalTarget * 0.20 
         }
       ];
     }
 
     const systemInstruction = `
-      You are a Senior Quantity Surveyor expert in Indian PWD Standards.
-      
-      CORE TASK: 
-      Analyze the uploaded drawing images. Extract a line-item Bill of Quantities (BOQ).
+      You are a Senior Project Management Consultant. 
+      Analyze the uploaded drawing images to estimate the TOTAL construction cost.
       
       STRICT PRICING RULES:
-      1. You MUST use the PWD Schedule of Rates (SOR) 2025-2026.
-      2. Generalizing rates is forbidden. Look for specific material grades (e.g., M25, Fe500D).
-      3. Use IS 1200 protocols for measurements.
+      1. DO NOT use PWD SOR. Use CURRENT MARKET RATES for A-grade construction in India (e.g., GIFT City, Mumbai, Delhi).
+      2. SCALE DETECTION: Identify dimensions. If a drawing represents a multi-story building or a large bungalow, the total cost MUST be in the range of ₹1 Crore to ₹10 Crore+. 
+      3. A common error is calculating per sq.ft. but missing the total quantity. Ensure 'qty' reflects the ENTIRE built-up area shown.
+      4. Standard Market Benchmarks: 
+         - Structure: ₹1,100 - ₹1,400 per sq.ft.
+         - Finishing: ₹800 - ₹1,200 per sq.ft.
+         - MEP: ₹400 - ₹600 per sq.ft.
       
-      DIFFERENTIATION LOGIC:
-      - Every drawing is unique. Identify unique project titles, scale, and room layouts.
-      - Do not return boilerplate data. If the plan shows a 500sqm slab, do not return a 100sqm estimate.
+      DIFFERENTIATION:
+      - Extract unique project titles or drawing numbers from the title block.
       
       OUTPUT:
       - Return ONLY a JSON array of objects.
     `;
 
-    const parts: any[] = [{ text: "Extract a unique BOQ for these specific plans using PWD SOR 2025-2026 rates." }];
+    const parts: any[] = [{ text: "Extract a high-accuracy Market-Rate BOQ. Pay extreme attention to SCALE to ensure the total reflects the actual project size (often in Crores)." }];
     
     for (const file of files) {
       if (file.type.startsWith('image/')) {
         const imagePart = await fileToDataPart(file);
         parts.push(imagePart);
-      } else {
-        parts.push({ text: `Processing non-image file metadata: ${file.name}` });
       }
     }
 
     const result = await ai.models.generateContent({
-      model: 'gemini-3-pro-preview', // High-reasoning model for math accuracy
+      model: 'gemini-3-pro-preview',
       contents: { parts },
       config: {
         systemInstruction,
@@ -143,168 +137,77 @@ export const extractBoqFromPlans = async (files: File[]) => {
 };
 
 /**
- * Analyzes a site frame for structural anomalies or safety hazards.
- */
-export const analyzeSiteFrame = async (imageData: string, stage: ProjectStage, cameraName: string) => {
-  try {
-    const ai = getAiClient();
-    if (!ai) return { visualAudit: "AI Service Offline (Missing Key)", progressPercentage: 0 };
-
-    const prompt = `Analyze this construction image for project stage ${stage} at ${cameraName}. Detect structural anomalies or safety hazards.`;
-    
-    const result = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
-      contents: { 
-        parts: [
-          { text: prompt }, 
-          { inlineData: { mimeType: "image/jpeg", data: imageData.includes(',') ? imageData.split(',')[1] : imageData } }
-        ] 
-      },
-      config: { 
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            visualAudit: { type: Type.STRING },
-            progressPercentage: { type: Type.NUMBER }
-          },
-          required: ['visualAudit', 'progressPercentage']
-        }
-      }
-    });
-    return JSON.parse(result.text || '{}');
-  } catch (error) {
-    console.error("Frame analysis error:", error);
-    return { visualAudit: "Analysis currently unavailable", progressPercentage: 0 };
-  }
-};
-
-/**
- * Gets regulatory advice based on Indian Construction Codes.
- */
-export const getRegulatoryAdvice = async (query: string) => {
-    try {
-        const ai = getAiClient();
-        if (!ai) return "Consult IS 456:2000. (Connect AI to enable live guidance)";
-
-        const response = await ai.models.generateContent({
-            model: 'gemini-3-flash-preview',
-            contents: `You are an expert on Indian Construction Codes (IS Codes). Provide a detailed but concise technical answer to: "${query}"`,
-        });
-        return response.text || "No regulatory guidance found for this query.";
-    } catch (error) {
-        console.error("Regulatory advice error:", error);
-        return "Regulatory link offline. Please consult IS 456:2000 manually.";
-    }
-}
-
-/**
- * Audits a construction material invoice against current stock summary.
- */
-export const auditInventoryInvoice = async (invoiceText: string, stockSummary: string) => {
-  try {
-    const ai = getAiClient();
-    if (!ai) return { discrepancies: false, message: "Connect AI to enable invoice auditing.", detectedItems: [] };
-
-    const result = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
-      contents: `Audit construction material invoice against current stock. Invoice: ${invoiceText}. Stock: ${stockSummary}.`,
-      config: { 
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            discrepancies: { type: Type.BOOLEAN },
-            message: { type: Type.STRING },
-            detectedItems: {
-              type: Type.ARRAY,
-              items: {
-                type: Type.OBJECT,
-                properties: {
-                  name: { type: Type.STRING },
-                  quantity: { type: Type.NUMBER }
-                },
-                required: ['name', 'quantity']
-              }
-            }
-          },
-          required: ['discrepancies', 'message', 'detectedItems']
-        }
-      }
-    });
-    return JSON.parse(result.text || '{}');
-  } catch (error) {
-    console.error("Invoice audit error:", error);
-    return { discrepancies: false, message: "Manual audit required", detectedItems: [] };
-  }
-};
-
-/**
- * Reconstructs a 3D BIM model from 2D Architectural and Structural plans.
- * Optimized for speed using Gemini 3 Flash.
+ * Reconstructs a 3D BIM model from 2D plans.
  */
 export const reconstructBimFromPlans = async (files: File[]) => {
   try {
     const ai = getAiClient();
-    
     if (!ai) {
-      console.warn("Using simulated BIM reconstruction (API_KEY not found)");
       const seed = files.reduce((acc, f) => acc + f.name.length, 0);
-      await new Promise(r => setTimeout(r, 2000));
       return {
         elements: [
-          { type: "Column", dimensions: `${300 + (seed % 50)}x${450 + (seed % 50)}mm`, position: "Grid A1-D4", material: "M30 Concrete" },
-          { type: "Beam", dimensions: "230x600mm", position: "Level 1", material: "M30 Concrete" },
-          { type: "Slab", dimensions: `${125 + (seed % 25)}mm thick`, position: "Floor 1-5", material: "M25 Concrete" }
+          { type: "Column", dimensions: `${300 + (seed % 50)}x450mm`, position: "Grid A1", material: "M30" },
+          { type: "Beam", dimensions: "230x600mm", position: "Level 1", material: "M30" }
         ],
-        levels: 3 + (seed % 5),
+        levels: 3 + (seed % 4),
         isCodeCompliant: true,
         estimatedLod: 350
       };
     }
-
-    const parts: any[] = [{ text: "Act as an expert BIM Engineer. Analyze these 2D plans to reconstruct a 3D BIM model schema. Generate a structured JSON output defining structural elements (Columns, Beams, Slabs) and materials." }];
-    
+    const parts: any[] = [{ text: "Analyze plans for BIM reconstruction." }];
     for (const file of files) {
-      if (file.type.startsWith('image/')) {
-        const imagePart = await fileToDataPart(file);
-        parts.push(imagePart);
-      }
+      if (file.type.startsWith('image/')) parts.push(await fileToDataPart(file));
     }
-
     const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview', 
+      model: 'gemini-3-flash-preview',
       contents: { parts },
       config: {
         responseMimeType: "application/json",
         responseSchema: {
           type: Type.OBJECT,
           properties: {
-            elements: {
-              type: Type.ARRAY,
-              items: {
-                type: Type.OBJECT,
-                properties: {
-                  type: { type: Type.STRING },
-                  dimensions: { type: Type.STRING },
-                  position: { type: Type.STRING },
-                  material: { type: Type.STRING }
-                },
-                required: ['type', 'dimensions', 'position', 'material']
-              }
-            },
+            elements: { type: Type.ARRAY, items: { type: Type.OBJECT, properties: { type: { type: Type.STRING }, dimensions: { type: Type.STRING }, position: { type: Type.STRING }, material: { type: Type.STRING } } } },
             levels: { type: Type.INTEGER },
             isCodeCompliant: { type: Type.BOOLEAN },
             estimatedLod: { type: Type.INTEGER }
-          },
-          required: ['elements', 'levels', 'isCodeCompliant', 'estimatedLod']
-        },
+          }
+        }
       }
     });
-
     return JSON.parse(response.text || '{}');
   } catch (error) {
-    console.error("BIM Reconstruction error:", error);
     return { elements: [], levels: 0, isCodeCompliant: false, estimatedLod: 0 };
   }
+};
+
+export const analyzeSiteFrame = async (imageData: string, stage: ProjectStage, cameraName: string) => {
+  const ai = getAiClient();
+  if (!ai) return { visualAudit: "Offline", progressPercentage: 0 };
+  const result = await ai.models.generateContent({
+    model: 'gemini-3-flash-preview',
+    contents: { parts: [{ text: `Analyze stage ${stage}` }, { inlineData: { mimeType: "image/jpeg", data: imageData.split(',')[1] } }] },
+    config: { responseMimeType: "application/json" }
+  });
+  return JSON.parse(result.text || '{}');
+};
+
+export const getRegulatoryAdvice = async (query: string) => {
+  const ai = getAiClient();
+  if (!ai) return "Offline Advice";
+  const response = await ai.models.generateContent({
+    model: 'gemini-3-flash-preview',
+    contents: query,
+  });
+  return response.text || "No guidance.";
+};
+
+export const auditInventoryInvoice = async (invoiceText: string, stockSummary: string) => {
+  const ai = getAiClient();
+  if (!ai) return { discrepancies: false, message: "Offline", detectedItems: [] };
+  const result = await ai.models.generateContent({
+    model: 'gemini-3-flash-preview',
+    contents: `Audit ${invoiceText} vs ${stockSummary}`,
+    config: { responseMimeType: "application/json" }
+  });
+  return JSON.parse(result.text || '{}');
 };
