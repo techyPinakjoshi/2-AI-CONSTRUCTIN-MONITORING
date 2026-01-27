@@ -3,7 +3,7 @@ import React, { useState, useRef, useContext } from 'react';
 import { 
   Calculator, X, UploadCloud, Loader2, Sparkles, FileText, 
   Download, ArrowRight, IndianRupee, Database, ChevronRight,
-  CheckCircle2, Plus, FileSpreadsheet, Zap, History
+  CheckCircle2, Plus, FileSpreadsheet, Zap, History, Folder, Settings2
 } from 'lucide-react';
 import { ThemeContext } from '../App';
 import { extractBoqFromPlans } from '../services/geminiService';
@@ -11,14 +11,17 @@ import Tooltip from './Tooltip';
 
 interface BoqExtractorProps {
   onClose: () => void;
-  onSyncToSuite: (data: any) => void;
+  onSyncToSuite: (data: any[], sourceFiles: string[], targetProjectId?: string, mode?: 'append' | 'replace') => void;
+  userProjects: any[];
 }
 
-const BoqExtractor: React.FC<BoqExtractorProps> = ({ onClose, onSyncToSuite }) => {
+const BoqExtractor: React.FC<BoqExtractorProps> = ({ onClose, onSyncToSuite, userProjects }) => {
   const { isDark, toggleTheme } = useContext(ThemeContext);
   const [isProcessing, setIsProcessing] = useState(false);
   const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
   const [boqData, setBoqData] = useState<any[]>([]);
+  const [targetProjectId, setTargetProjectId] = useState<string>('new');
+  const [syncMode, setSyncMode] = useState<'append' | 'replace'>('append');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -107,7 +110,7 @@ const BoqExtractor: React.FC<BoqExtractorProps> = ({ onClose, onSyncToSuite }) =
               </div>
             </div>
           ) : (
-            <div className="animate-in slide-in-from-bottom-6 duration-700 space-y-8">
+            <div className="animate-in slide-in-from-bottom-6 duration-700 space-y-8 pb-32">
               <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6 bg-white dark:bg-slate-900 p-10 rounded-[3.5rem] border border-zinc-200 dark:border-white/5 shadow-2xl overflow-hidden relative">
                 <div className="absolute top-0 right-0 p-10 opacity-[0.03] rotate-12"><Calculator size={200} /></div>
                 <div className="relative z-10">
@@ -121,6 +124,84 @@ const BoqExtractor: React.FC<BoqExtractorProps> = ({ onClose, onSyncToSuite }) =
                 <div className="relative z-10 text-right">
                   <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Estimated Base Value</div>
                   <div className="text-5xl font-black text-slate-900 dark:text-white tracking-tighter italic">₹{(totalAmount/100000).toFixed(1)}L</div>
+                </div>
+              </div>
+
+              {/* Sync Configuration Panel */}
+              <div className="bg-amber-500/5 border border-amber-500/20 rounded-[3rem] p-8 space-y-6">
+                <div className="flex items-center gap-4">
+                  <div className="p-3 bg-amber-500 rounded-2xl text-white shadow-lg shadow-amber-500/20">
+                    <Settings2 size={20} />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-black text-slate-900 dark:text-white uppercase italic tracking-tighter leading-none">Sync Configuration</h3>
+                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1">Determine how to integrate these quantities into your project suite.</p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                  {/* Select Project */}
+                  <div className="space-y-4">
+                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-2">Select Sync Target</label>
+                    <div className="grid grid-cols-1 gap-2">
+                      <button 
+                        onClick={() => setTargetProjectId('new')}
+                        className={`flex items-center gap-4 p-4 rounded-2xl border transition-all text-left ${targetProjectId === 'new' ? 'bg-amber-500 text-white border-amber-500 shadow-xl' : 'bg-white dark:bg-slate-900 border-zinc-200 dark:border-white/5 text-slate-600 dark:text-slate-400'}`}
+                      >
+                        <Plus size={18} />
+                        <div className="flex-1">
+                          <div className="text-xs font-black uppercase">Create New Project</div>
+                          <div className="text-[9px] opacity-70">Initialize a fresh neural twin</div>
+                        </div>
+                      </button>
+                      
+                      {userProjects.map(proj => (
+                        <button 
+                          key={proj.id}
+                          onClick={() => setTargetProjectId(proj.id)}
+                          className={`flex items-center gap-4 p-4 rounded-2xl border transition-all text-left ${targetProjectId === proj.id ? 'bg-amber-500 text-white border-amber-500 shadow-xl' : 'bg-white dark:bg-slate-900 border-zinc-200 dark:border-white/5 text-slate-600 dark:text-slate-400'}`}
+                        >
+                          <Folder size={18} />
+                          <div className="flex-1">
+                            <div className="text-xs font-black uppercase">{proj.name}</div>
+                            <div className="text-[9px] opacity-70">Update existing workspace</div>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Sync Mode */}
+                  {targetProjectId !== 'new' && (
+                    <div className="space-y-4 animate-in slide-in-from-left-4 duration-500">
+                      <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-2">Update Strategy</label>
+                      <div className="flex flex-col gap-2">
+                        <button 
+                          onClick={() => setSyncMode('append')}
+                          className={`flex items-center gap-4 p-4 rounded-2xl border transition-all text-left ${syncMode === 'append' ? 'bg-slate-900 dark:bg-white text-white dark:text-slate-900 border-transparent shadow-xl' : 'bg-white dark:bg-slate-900 border-zinc-200 dark:border-white/5 text-slate-600 dark:text-slate-400'}`}
+                        >
+                          <History size={18} />
+                          <div className="flex-1">
+                            <div className="text-xs font-black uppercase tracking-tight">Append to Existing BOQ</div>
+                            <div className="text-[9px] opacity-70">Add extracted items to your current ledger</div>
+                          </div>
+                          {syncMode === 'append' && <CheckCircle2 size={16} />}
+                        </button>
+                        
+                        <button 
+                          onClick={() => setSyncMode('replace')}
+                          className={`flex items-center gap-4 p-4 rounded-2xl border transition-all text-left ${syncMode === 'replace' ? 'bg-slate-900 dark:bg-white text-white dark:text-slate-900 border-transparent shadow-xl' : 'bg-white dark:bg-slate-900 border-zinc-200 dark:border-white/5 text-slate-600 dark:text-slate-400'}`}
+                        >
+                          <X size={18} />
+                          <div className="flex-1">
+                            <div className="text-xs font-black uppercase tracking-tight">Replace Existing BOQ</div>
+                            <div className="text-[9px] opacity-70">Wipe current ledger and start fresh</div>
+                          </div>
+                          {syncMode === 'replace' && <CheckCircle2 size={16} />}
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -163,10 +244,11 @@ const BoqExtractor: React.FC<BoqExtractorProps> = ({ onClose, onSyncToSuite }) =
                     <Download size={18} /> Export Excel
                   </button>
                   <button 
-                    onClick={() => onSyncToSuite(boqData)}
+                    onClick={() => onSyncToSuite(boqData, uploadedFiles.map(f => f.name), targetProjectId === 'new' ? undefined : targetProjectId, syncMode)}
                     className="flex items-center gap-3 px-12 py-5 bg-amber-500 text-white rounded-[2rem] text-xs font-black uppercase tracking-widest shadow-2xl shadow-amber-500/30 hover:scale-105 active:scale-95 transition-all italic"
                   >
-                    <ArrowRight size={18} /> Sync to Project Suite
+                    <ArrowRight size={18} /> 
+                    {targetProjectId === 'new' ? 'Sync to New Project' : `Update ${userProjects.find(p => p.id === targetProjectId)?.name}`}
                   </button>
                 </div>
               </div>

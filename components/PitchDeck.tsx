@@ -46,11 +46,18 @@ const PitchDeck: React.FC<PitchDeckProps> = ({ onClose }) => {
       points: ["$25B Total Addressable Market for ConTech", "Mandatory BIM adoption for Govt projects", "Zero local competitors with real-time AI logic"]
     },
     {
-      title: "Business Model",
-      subtitle: "Scalable Enterprise SaaS",
+      title: "Revenue Model",
+      subtitle: "Hybrid Outcome-Based Pricing",
       icon: <BarChart3 className="text-blue-400" size={48} />,
-      content: "Tiered subscription model built for contractors and project management consultants.",
-      points: ["₹4,999/mo (SME Tier)", "₹14,500/Project (Enterprise)", "Custom API licensing for large infra firms"]
+      content: "A disruptive pricing model designed for the Indian market landscape.",
+      points: ["Free: 2D Plan to BOQ", "₹5,000: 2D-to-BIM Synthesis", "₹5,000/User: Manual Progress Tracking", "1-5% Project Value: AI Site Monitoring"]
+    },
+    {
+      title: "Financial Projections",
+      subtitle: "Scaling with Bharat's Growth",
+      icon: <TrendingUp className="text-cyan-400" size={48} />,
+      content: "Aggressive growth leveraging GIFT City pilots and national infrastructure expansion.",
+      points: ["Y1: ₹45L ARR (Pilots)", "Y2: ₹3.8Cr ARR (150+ Sites)", "Y3: ₹12Cr+ ARR (Govt Infra Expansion)", "Benefit: 60% Faster Reporting"]
     },
     {
       title: "Why iCreate?",
@@ -58,13 +65,6 @@ const PitchDeck: React.FC<PitchDeckProps> = ({ onClose }) => {
       icon: <Handshake className="text-pink-400" size={48} />,
       content: "We seek iCreate's help to bridge the gap between our code and the physical construction site.",
       points: ["Sandbox Access (GIFT City/Dholera pilots)", "BIS/CBRI Regulatory validation", "DeepTech Mentorship for Vision AI"]
-    },
-    {
-      title: "Traction & Roadmap",
-      subtitle: "Building the Future of Vision-AI",
-      icon: <TrendingUp className="text-cyan-400" size={48} />,
-      content: "Phase 1: Monitoring. Phase 2: Predictive. Phase 3: Autonomous.",
-      points: ["Q1 2025: Live Pilot in Gujarat", "Q3 2025: Automated RFI Workflows", "2026: Predictive Material Procurement"]
     },
     {
       title: "The Team",

@@ -1,7 +1,6 @@
 
 import React, { useState, useEffect, useRef, memo } from 'react';
 import { LayerVisibility, ProjectStage, CameraFeed, ViewMode, TourSession, AiDetection } from '../types';
-// Fixed: Added SplitSquareHorizontal to the imports from lucide-react
 import { Maximize, Minimize, Layers, RefreshCw, Scan, Box, MapPin, ShieldCheck, AlertTriangle, SplitSquareHorizontal } from 'lucide-react';
 import { TOUR_LOCATIONS } from '../constants';
 import { analyzeSiteFrame } from '../services/geminiService';
@@ -45,6 +44,7 @@ const ThreeDViewer: React.FC<ThreeDViewerProps> = ({
   const [complianceStatus, setComplianceStatus] = useState<'VERIFIED' | 'MONITORING' | 'ALERT'>('MONITORING');
   
   const intervalRef = useRef<number | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     setIsLoading(true);
@@ -73,11 +73,62 @@ const ThreeDViewer: React.FC<ThreeDViewerProps> = ({
     };
   }, [activeCamera?.id]);
 
+  // Handle Fullscreen transitions
+  useEffect(() => {
+    const handleFsChange = () => {
+      setIsMaximized(!!document.fullscreenElement);
+    };
+    document.addEventListener('fullscreenchange', handleFsChange);
+    document.addEventListener('webkitfullscreenchange', handleFsChange);
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFsChange);
+      document.removeEventListener('webkitfullscreenchange', handleFsChange);
+    };
+  }, []);
+
+  const toggleFullScreen = async () => {
+    if (!containerRef.current) return;
+
+    if (!document.fullscreenElement) {
+      try {
+        const enterFs = containerRef.current.requestFullscreen || 
+                       (containerRef.current as any).webkitRequestFullscreen ||
+                       (containerRef.current as any).mozRequestFullScreen ||
+                       (containerRef.current as any).msRequestFullscreen;
+        
+        if (enterFs) {
+          await enterFs.call(containerRef.current);
+        } else {
+          // No API available, use CSS fallback
+          setIsMaximized(true);
+        }
+      } catch (err) {
+        console.warn("Native Fullscreen blocked by browser/iframe policy. Falling back to CSS Maximize.", err);
+        // Fallback to CSS Maximize if API blocked (e.g., in iframe without allow="fullscreen")
+        setIsMaximized(true);
+      }
+    } else {
+      try {
+        const exitFs = document.exitFullscreen || 
+                      (document as any).webkitExitFullscreen ||
+                      (document as any).mozCancelFullScreen ||
+                      (document as any).msExitFullscreen;
+        
+        if (exitFs) {
+          await exitFs.call(document);
+        } else {
+          setIsMaximized(false);
+        }
+      } catch (err) {
+        setIsMaximized(false);
+      }
+    }
+  };
+
   const handleAnalyzeStream = async () => {
     if (!activeCamera || isAnalyzing) return;
     setIsAnalyzing(true);
     try {
-      // Mocked frame capture
       await analyzeSiteFrame("data:image/jpeg;base64,...", stage, activeCamera.name);
       setComplianceStatus('VERIFIED');
     } catch (e) {
@@ -89,11 +140,14 @@ const ThreeDViewer: React.FC<ThreeDViewerProps> = ({
   };
 
   return (
-    <div className={`${isMaximized ? "fixed inset-0 z-[100] bg-slate-950" : "relative w-full h-full bg-slate-900 rounded-xl overflow-hidden border border-slate-800 shadow-inner"}`}>
+    <div 
+      ref={containerRef}
+      className={`${isMaximized ? "fixed inset-0 z-[1000] bg-slate-950" : "relative w-full h-full bg-slate-900 rounded-xl overflow-hidden border border-slate-800 shadow-inner"}`}
+    >
       
       {/* HUD - Top Left */}
-      <div className="absolute top-3 left-3 z-30 flex gap-2 pointer-events-none">
-        <div className="bg-slate-900/90 px-3 py-1.5 rounded-lg border border-slate-700 text-slate-300 flex items-center gap-3 shadow-2xl">
+      <div className="absolute top-4 left-4 z-30 flex gap-2 pointer-events-none">
+        <div className="bg-slate-900/90 px-3 py-1.5 rounded-lg border border-slate-700 text-slate-300 flex items-center gap-3 shadow-2xl backdrop-blur-md">
           {activeCamera ? (
             <div className="flex items-center gap-2">
               <div className="w-1.5 h-1.5 bg-red-500 rounded-full animate-pulse"></div>
@@ -120,17 +174,22 @@ const ThreeDViewer: React.FC<ThreeDViewerProps> = ({
         )}
       </div>
       
-      <div className="absolute top-3 right-3 z-30 flex flex-col gap-2">
-        <button onClick={() => setIsMaximized(!isMaximized)} className="p-2 bg-slate-900/90 text-slate-400 hover:text-cyan-400 rounded-lg border border-slate-700 backdrop-blur-md transition-all active:scale-90 shadow-xl">
-          {isMaximized ? <Minimize size={18} /> : <Maximize size={18} />}
+      <div className="absolute top-4 right-4 z-30 flex flex-col gap-2">
+        <button 
+          onClick={toggleFullScreen} 
+          className="p-2.5 bg-slate-900/90 text-slate-400 hover:text-cyan-400 rounded-lg border border-slate-700 backdrop-blur-md transition-all active:scale-90 shadow-xl"
+          title={isMaximized ? "Minimize" : "Full Screen"}
+        >
+          {isMaximized ? <Minimize size={20} /> : <Maximize size={20} />}
         </button>
         {activeCamera && (
           <button 
             onClick={handleAnalyzeStream} 
             disabled={isAnalyzing}
-            className={`p-2 rounded-lg border transition-all backdrop-blur-md active:scale-90 shadow-xl ${isAnalyzing ? 'bg-orange-600 border-orange-500 text-white' : 'bg-slate-900 text-orange-400 border-slate-700 hover:text-orange-300'}`}
+            className={`p-2.5 rounded-lg border transition-all backdrop-blur-md active:scale-90 shadow-xl ${isAnalyzing ? 'bg-orange-600 border-orange-500 text-white' : 'bg-slate-900 text-orange-400 border-slate-700 hover:text-orange-300'}`}
+            title="Scan Site Frame"
           >
-            {isAnalyzing ? <RefreshCw size={18} className="animate-spin" /> : <Scan size={18} />}
+            {isAnalyzing ? <RefreshCw size={20} className="animate-spin" /> : <Scan size={20} />}
           </button>
         )}
       </div>
@@ -156,8 +215,8 @@ const ThreeDViewer: React.FC<ThreeDViewerProps> = ({
             {/* Split UI visual handle */}
             <div className="absolute top-0 bottom-0 z-20 pointer-events-none" style={{ left: `${splitPosition}%` }}>
                 <div className="h-full w-0.5 bg-cyan-500 shadow-[0_0_10px_rgba(6,182,212,0.5)]"></div>
-                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-cyan-600 p-1 rounded-md border border-cyan-400">
-                    <SplitSquareHorizontal size={12} className="text-white" />
+                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-cyan-600 p-1.5 rounded-md border border-cyan-400 shadow-xl">
+                    <SplitSquareHorizontal size={14} className="text-white" />
                 </div>
             </div>
           </div>
@@ -166,8 +225,8 @@ const ThreeDViewer: React.FC<ThreeDViewerProps> = ({
         {viewMode === 'TOUR' && !activeCamera && (
           <div className="relative w-full h-full bg-slate-950 flex items-center justify-center">
             <div className="absolute inset-0 bg-cover bg-center opacity-60 transition-all duration-1000" style={{ backgroundImage: `url('${TOUR_LOCATIONS['LOC-A'].imageUrl}')` }}></div>
-            <div className="absolute bottom-6 bg-slate-900/95 px-4 py-2 rounded-full border border-slate-700 text-[10px] font-bold text-white z-40 flex items-center gap-2 shadow-2xl backdrop-blur-md">
-              <MapPin size={12} className="text-cyan-400" /> {TOUR_LOCATIONS['LOC-A'].name}
+            <div className="absolute bottom-10 bg-slate-900/95 px-5 py-2.5 rounded-full border border-slate-700 text-[10px] font-black text-white z-40 flex items-center gap-2 shadow-2xl backdrop-blur-md uppercase tracking-widest">
+              <MapPin size={14} className="text-cyan-400" /> {TOUR_LOCATIONS['LOC-A'].name}
             </div>
           </div>
         )}
@@ -193,10 +252,10 @@ const ThreeDViewer: React.FC<ThreeDViewerProps> = ({
                 <div className="absolute inset-0 opacity-10 bg-[radial-gradient(#0ea5e9_1px,transparent_1px)] [background-size:20px_20px]"></div>
                 <div className="text-center relative z-10 animate-in zoom-in-95 duration-500">
                   <div className="relative inline-block mb-4">
-                    <Layers size={64} className="text-slate-700 mx-auto" />
-                    <Box size={24} className="text-cyan-500 absolute -bottom-1 -right-1 animate-bounce" />
+                    <Layers size={80} className="text-slate-800 mx-auto" />
+                    <Box size={32} className="text-cyan-500 absolute -bottom-2 -right-2 animate-bounce" />
                   </div>
-                  <p className="text-slate-500 font-mono text-[10px] uppercase tracking-widest">{bimFileName ? `BIM Asset: ${bimFileName}` : 'Waiting for Asset Sync'}</p>
+                  <p className="text-slate-600 font-mono text-[10px] uppercase tracking-[0.4em]">{bimFileName ? `BIM Asset: ${bimFileName}` : 'Waiting for Asset Sync'}</p>
                 </div>
               </div>
             )}
@@ -205,9 +264,9 @@ const ThreeDViewer: React.FC<ThreeDViewerProps> = ({
       </div>
 
       {isLoading && (
-        <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-slate-950/80 backdrop-blur-sm">
-          <div className="w-10 h-10 border-2 border-cyan-500 border-t-transparent rounded-full animate-spin shadow-[0_0_15px_rgba(6,182,212,0.3)] mb-4"></div>
-          <span className="text-[10px] font-black text-cyan-400 uppercase tracking-widest">Streaming Engine...</span>
+        <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-slate-950/90 backdrop-blur-sm">
+          <div className="w-12 h-12 border-4 border-cyan-500 border-t-transparent rounded-full animate-spin shadow-[0_0_20px_rgba(6,182,212,0.3)] mb-4"></div>
+          <span className="text-[10px] font-black text-cyan-400 uppercase tracking-[0.5em]">Vision Link...</span>
         </div>
       )}
     </div>

@@ -4,14 +4,12 @@ import { ProjectStage } from "../types";
 
 /**
  * Safely obtains the Gemini API client.
- * Includes a check for process.env availability to prevent ReferenceErrors.
+ * Always creates a new instance right before making an API call.
  */
 const getAiClient = () => {
-  const apiKey = (typeof process !== 'undefined' && process.env?.API_KEY) || (window as any).process?.env?.API_KEY;
+  const apiKey = process.env.API_KEY;
   if (!apiKey) {
-    console.warn("Gemini API Key is missing. AI features will be limited.");
-    // We return a mock-friendly client or throw a clear error that the service can catch
-    throw new Error("MISSING_API_KEY");
+    throw new Error("API_KEY is not defined in the environment.");
   }
   return new GoogleGenAI({ apiKey });
 };
@@ -29,8 +27,9 @@ export const reconstructBimFromPlans = async (planNames: string[]) => {
     `;
 
     const result = await ai.models.generateContent({
+      // Complex reasoning task: gemini-3-pro-preview
       model: 'gemini-3-pro-preview',
-      contents: [{ text: prompt }],
+      contents: prompt,
       config: {
         responseMimeType: "application/json",
         responseSchema: {
@@ -45,12 +44,14 @@ export const reconstructBimFromPlans = async (planNames: string[]) => {
                   dimensions: { type: Type.STRING },
                   position: { type: Type.STRING },
                   material: { type: Type.STRING }
-                }
+                },
+                required: ['type', 'dimensions', 'position', 'material']
               }
             },
             levels: { type: Type.INTEGER },
             isCodeCompliant: { type: Type.BOOLEAN }
-          }
+          },
+          required: ['elements', 'levels', 'isCodeCompliant']
         },
       }
     });
@@ -74,8 +75,9 @@ export const extractBoqFromPlans = async (planNames: string[]) => {
     `;
 
     const result = await ai.models.generateContent({
+      // Complex reasoning task: gemini-3-pro-preview
       model: 'gemini-3-pro-preview',
-      contents: [{ text: prompt }],
+      contents: prompt,
       config: {
         responseMimeType: "application/json",
         responseSchema: {
@@ -92,6 +94,7 @@ export const extractBoqFromPlans = async (planNames: string[]) => {
               rate: { type: Type.NUMBER },
               amount: { type: Type.NUMBER },
             },
+            required: ["id", "code", "category", "description", "qty", "unit", "rate", "amount"],
             propertyOrdering: ["id", "code", "category", "description", "qty", "unit", "rate", "amount"],
           },
         },
@@ -105,12 +108,16 @@ export const extractBoqFromPlans = async (planNames: string[]) => {
   }
 };
 
+/**
+ * Analyzes a site frame for structural anomalies or safety hazards.
+ */
 export const analyzeSiteFrame = async (imageData: string, stage: ProjectStage, cameraName: string) => {
   try {
     const ai = getAiClient();
     const prompt = `Analyze this construction image for project stage ${stage} at ${cameraName}. Detect structural anomalies or safety hazards.`;
     
     const result = await ai.models.generateContent({
+      // Basic text/image task: gemini-3-flash-preview
       model: 'gemini-3-flash-preview',
       contents: { 
         parts: [
@@ -118,37 +125,79 @@ export const analyzeSiteFrame = async (imageData: string, stage: ProjectStage, c
           { inlineData: { mimeType: "image/jpeg", data: imageData.includes(',') ? imageData.split(',')[1] : imageData } }
         ] 
       },
-      config: { responseMimeType: "application/json" }
+      config: { 
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            visualAudit: { type: Type.STRING },
+            progressPercentage: { type: Type.NUMBER }
+          },
+          required: ['visualAudit', 'progressPercentage']
+        }
+      }
     });
     return JSON.parse(result.text || '{}');
   } catch (error) {
+    console.error("Frame analysis error:", error);
     return { visualAudit: "Analysis currently unavailable", progressPercentage: 0 };
   }
 };
 
+/**
+ * Gets regulatory advice based on Indian Construction Codes.
+ */
 export const getRegulatoryAdvice = async (query: string) => {
     try {
         const ai = getAiClient();
         const response = await ai.models.generateContent({
+            // Basic Q&A task: gemini-3-flash-preview
             model: 'gemini-3-flash-preview',
-            contents: [{ text: `You are an expert on Indian Construction Codes (IS Codes). Provide a detailed but concise technical answer to: "${query}"` }],
+            contents: `You are an expert on Indian Construction Codes (IS Codes). Provide a detailed but concise technical answer to: "${query}"`,
         });
         return response.text || "No regulatory guidance found for this query.";
     } catch (error) {
+        console.error("Regulatory advice error:", error);
         return "Regulatory link offline. Please consult IS 456:2000 manually.";
     }
 }
 
+/**
+ * Audits a construction material invoice against current stock summary.
+ */
 export const auditInventoryInvoice = async (invoiceText: string, stockSummary: string) => {
   try {
     const ai = getAiClient();
     const result = await ai.models.generateContent({
+      // Basic audit task: gemini-3-flash-preview
       model: 'gemini-3-flash-preview',
-      contents: [{ text: `Audit construction material invoice against current stock. Invoice: ${invoiceText}. Stock: ${stockSummary}.` }],
-      config: { responseMimeType: "application/json" }
+      contents: `Audit construction material invoice against current stock. Invoice: ${invoiceText}. Stock: ${stockSummary}.`,
+      config: { 
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            discrepancies: { type: Type.BOOLEAN },
+            message: { type: Type.STRING },
+            detectedItems: {
+              type: Type.ARRAY,
+              items: {
+                type: Type.OBJECT,
+                properties: {
+                  name: { type: Type.STRING },
+                  quantity: { type: Type.NUMBER }
+                },
+                required: ['name', 'quantity']
+              }
+            }
+          },
+          required: ['discrepancies', 'message', 'detectedItems']
+        }
+      }
     });
     return JSON.parse(result.text || '{}');
   } catch (error) {
+    console.error("Invoice audit error:", error);
     return { discrepancies: false, message: "Manual audit required", detectedItems: [] };
   }
 };

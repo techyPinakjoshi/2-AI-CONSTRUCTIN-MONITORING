@@ -4,11 +4,10 @@ import {
   Send, Bot, User, Building2, Waves, Milestone, FlaskConical, 
   Sparkles, Globe, Moon, Sun, ArrowRight, MessageSquare,
   Box, Calculator, Video, ShieldCheck, Plus, Mic, Loader2,
-  LayoutDashboard, HardDrive, Briefcase, FileText, Presentation, Layers
+  LayoutDashboard, HardDrive, Briefcase, FileText, Layers, ChevronRight, Zap
 } from 'lucide-react';
 import { getRegulatoryAdvice } from '../services/geminiService';
 import { ThemeContext } from '../App';
-import PitchDeck from './PitchDeck';
 import BimSynthesisView from './BimSynthesisView';
 
 interface Message { 
@@ -21,10 +20,9 @@ const APP_LOGO_SVG = `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/sv
 const FALLBACK_LOGO = "./logo.png";
 
 const CATEGORIES = [
-  { id: 'buildings', name: 'Buildings', icon: <Building2 size={14} />, color: 'bg-blue-600', prompt: 'Tell me about residential building codes (IS 456).' },
-  { id: 'dams', name: 'Dams', icon: <Waves size={14} />, color: 'bg-cyan-600', prompt: 'What are the safety codes for gravity dams in India?' },
-  { id: 'bridges', name: 'Bridges', icon: <Milestone size={14} />, color: 'bg-indigo-600', prompt: 'IRC standards for highway bridge construction.' },
-  { id: 'testing', name: 'Materials', icon: <FlaskConical size={14} />, color: 'bg-amber-600', prompt: 'Standard tests for concrete grade M25 (IS 2386).' },
+  { id: 'buildings', name: 'Buildings', icon: <Building2 size={12} />, prompt: 'Tell me about residential building codes (IS 456).' },
+  { id: 'dams', name: 'Dams', icon: <Waves size={12} />, prompt: 'What are the safety codes for gravity dams in India?' },
+  { id: 'testing', name: 'Materials', icon: <FlaskConical size={12} />, prompt: 'Standard tests for concrete grade M25 (IS 2386).' },
 ];
 
 interface LandingChatProps {
@@ -41,8 +39,8 @@ const LandingChat: React.FC<LandingChatProps> = ({ onAuthRequired, onEnterApp, o
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
-  const [showPitchDeck, setShowPitchDeck] = useState(false);
   const [showBimSynthesis, setShowBimSynthesis] = useState(false);
+  const [showChatWindow, setShowChatWindow] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -54,6 +52,8 @@ const LandingChat: React.FC<LandingChatProps> = ({ onAuthRequired, onEnterApp, o
     const finalInput = customInput || input;
     if (!finalInput.trim() || isTyping) return;
 
+    if (!showChatWindow) setShowChatWindow(true);
+
     const userMsg = finalInput;
     setInput('');
     setIsTyping(true);
@@ -63,7 +63,7 @@ const LandingChat: React.FC<LandingChatProps> = ({ onAuthRequired, onEnterApp, o
       const responseText = await getRegulatoryAdvice(userMsg);
       setMessages(prev => [...prev, { role: 'assistant', content: responseText }]);
     } catch (error) {
-      setMessages(prev => [...prev, { role: 'assistant', content: "Neural link lost. Re-establishing connection to Regulatory database..." }]);
+      setMessages(prev => [...prev, { role: 'assistant', content: "Neural link lost. Re-establishing connection..." }]);
     } finally {
       setIsTyping(false);
     }
@@ -72,260 +72,197 @@ const LandingChat: React.FC<LandingChatProps> = ({ onAuthRequired, onEnterApp, o
   return (
     <div className="flex h-screen bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100 overflow-hidden font-sans relative">
       
-      {/* SIDEBAR */}
-      <aside className="hidden lg:flex w-72 bg-white dark:bg-slate-900 border-r border-zinc-200 dark:border-white/5 flex col p-6 overflow-y-auto shrink-0 z-50 shadow-2xl relative">
-        <div className="mb-10 flex items-center gap-3">
-          <div className="w-12 h-12 rounded-xl overflow-hidden border-2 border-cyan-500/30 shadow-lg bg-slate-900 flex items-center justify-center">
-             <img 
-               src={FALLBACK_LOGO} 
-               alt="Logo" 
-               className="w-full h-full object-contain" 
-               onError={(e) => { e.currentTarget.src = APP_LOGO_SVG; }}
-             />
+      {/* GLOBAL NAVBAR */}
+      <nav className="absolute top-0 left-0 right-0 h-20 flex items-center justify-between px-8 z-[60] bg-white/10 dark:bg-slate-950/10 backdrop-blur-md border-b border-zinc-200 dark:border-white/5">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl overflow-hidden bg-slate-900 flex items-center justify-center p-1 border border-cyan-500/30">
+             <img src={FALLBACK_LOGO} alt="Logo" className="w-full h-full object-contain" onError={(e) => { e.currentTarget.src = APP_LOGO_SVG; }} />
           </div>
-          <span className="font-black text-lg tracking-tighter uppercase italic dark:text-white">Construct<span className="text-cyan-500">AI</span></span>
+          <span className="font-black text-lg tracking-tighter uppercase italic dark:text-white">WEAUTOMATES</span>
         </div>
-
-        <nav className="space-y-6 flex-1">
-            <section>
-              <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2 mb-3">Enterprise Suite</h3>
-              <div className="space-y-1">
-                  <ServiceLink icon={<LayoutDashboard size={14}/>} label="Client Portal" onClick={onOpenBoqDashboard} active />
-                  <ServiceLink icon={<HardDrive size={14}/>} label="CDE Vault" onClick={onOpenBoqDashboard} />
-                  <ServiceLink icon={<Briefcase size={14}/>} label="Contract Ledger" onClick={onOpenBoqDashboard} />
-              </div>
-            </section>
-
-            <section>
-              <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2 mb-3">Site Intelligence</h3>
-              <div className="space-y-1">
-                  <ServiceLink icon={<Box size={14}/>} label="BIM Synthesis" onClick={() => setShowBimSynthesis(true)} />
-                  <ServiceLink icon={<Video size={14}/>} label="AI Vision Monitor" onClick={onEnterApp} />
-                  <ServiceLink icon={<Calculator size={14}/>} label="2D to BOQ Engine" onClick={onOpenBoqExtractor} />
-              </div>
-            </section>
-
-            <section>
-              <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2 mb-3">iCreate Pitch</h3>
-              <div className="space-y-1">
-                  <ServiceLink 
-                    icon={<Presentation size={14} className="text-purple-500" />} 
-                    label="View Pitch Deck" 
-                    onClick={() => setShowPitchDeck(true)} 
-                    className="border border-purple-500/20 bg-purple-500/5"
-                  />
-              </div>
-            </section>
-        </nav>
-
-        <div className="mt-auto pt-6 border-t border-zinc-200 dark:border-white/5 flex flex-col gap-3">
-           <button onClick={toggleTheme} className="w-full flex items-center justify-between p-3 rounded-xl bg-zinc-50 dark:bg-slate-800 text-slate-500 border border-zinc-200 dark:border-white/5 transition-all">
-              <span className="text-[10px] font-bold uppercase tracking-widest">Theme</span>
-              {isDark ? <Sun size={14} className="text-amber-400" /> : <Moon size={14} className="text-indigo-600" />}
-           </button>
-           <button onClick={onAuthRequired} className="w-full bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-xl py-3 text-[10px] font-black uppercase tracking-[0.2em] shadow-xl hover:scale-105 transition-all active:scale-95">
-              Secure Access
-           </button>
-        </div>
-      </aside>
-
-      {/* Main Container */}
-      <main className="flex-1 flex flex-col items-center justify-center p-4 md:p-6 transition-all duration-700 relative overflow-y-auto pt-20">
         
-        {/* BRANDING */}
-        <div className="flex flex-col items-center w-full max-w-2xl mb-12 text-center animate-in fade-in slide-in-from-top-4 duration-1000">
-            <div className="w-24 h-24 md:w-32 md:h-32 rounded-3xl overflow-hidden border-4 border-cyan-500 shadow-[0_0_40px_rgba(6,182,212,0.2)] bg-slate-950 mb-10 transition-transform hover:scale-105 duration-500 flex items-center justify-center p-2">
-               <img 
-                 src={FALLBACK_LOGO} 
-                 alt="Logo" 
-                 className="w-full h-full object-contain"
-                 onError={(e) => { e.currentTarget.src = APP_LOGO_SVG; }}
-               />
-            </div>
+        <div className="flex items-center gap-4">
+          <button onClick={toggleTheme} className="p-2.5 rounded-xl bg-zinc-100 dark:bg-slate-800 text-slate-500 transition-all border border-zinc-200 dark:border-white/5">
+            {isDark ? <Sun size={18} className="text-amber-400" /> : <Moon size={18} className="text-indigo-600" />}
+          </button>
+          <button onClick={onAuthRequired} className="px-6 py-2.5 bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-xl text-[10px] font-black uppercase tracking-widest hover:scale-105 active:scale-95 transition-all shadow-xl">
+            {user ? 'Account' : 'Secure Entry'}
+          </button>
+        </div>
+      </nav>
 
-            <span className="text-4xl md:text-6xl font-black uppercase tracking-[0.6em] bg-clip-text text-transparent bg-gradient-to-r from-cyan-400 via-fuchsia-500 to-amber-500 drop-shadow-[0_0_25px_rgba(244,63,94,0.3)] mb-10">
-              WEAUTOMATES
-            </span>
+      {/* MAIN LAYOUT */}
+      <main className="flex-1 flex flex-col md:flex-row h-full pt-20">
+        
+        {/* LEFT: HERO & FEATURES */}
+        <div className={`flex-1 overflow-y-auto px-6 md:px-12 py-10 transition-all duration-700 ${showChatWindow ? 'md:max-w-xl lg:max-w-2xl' : 'max-w-full'}`}>
+          <div className="max-w-4xl mx-auto space-y-12 animate-in fade-in slide-in-from-left-6 duration-1000">
             
-            <div className={`transition-all duration-500 ${messages.length > 0 ? 'mb-4' : 'mb-0'}`}>
-               <h1 className="text-xl md:text-3xl font-black text-slate-900 dark:text-white tracking-tight leading-snug px-4">
-                 Unified Project Management & Monitoring.
-               </h1>
-            </div>
+            <header className="space-y-6">
+              <div className="inline-flex items-center gap-2 px-4 py-2 bg-cyan-500/10 border border-cyan-500/20 rounded-full text-cyan-500">
+                <Sparkles size={14} />
+                <span className="text-[10px] font-black uppercase tracking-[0.2em]">Next-Gen Site Intelligence</span>
+              </div>
+              <h1 className="text-5xl md:text-7xl font-black text-slate-900 dark:text-white leading-[0.95] uppercase italic tracking-tighter">
+                Unified <span className="text-cyan-500">Monitoring</span> & Operations.
+              </h1>
+              <p className="text-lg text-slate-500 dark:text-slate-400 max-w-xl font-medium leading-relaxed italic">
+                Bridging the gap between 2D plans, BIM design, and real-time site reality with Weautomates Vision AI.
+              </p>
+              
+              <div className="flex flex-wrap gap-4 pt-4">
+                <button 
+                  onClick={onEnterApp}
+                  className="px-10 py-5 bg-cyan-600 hover:bg-cyan-500 text-white rounded-[2rem] font-black uppercase tracking-widest shadow-2xl shadow-cyan-600/20 active:scale-95 transition-all flex items-center gap-3 italic"
+                >
+                  <Video size={20} /> Start Site Monitor
+                </button>
+                <button 
+                  onClick={onOpenBoqDashboard}
+                  className="px-8 py-5 bg-white dark:bg-slate-900 border border-zinc-200 dark:border-white/10 text-slate-900 dark:text-white rounded-[2rem] font-black uppercase tracking-widest hover:bg-zinc-50 dark:hover:bg-white/5 transition-all shadow-xl flex items-center gap-3"
+                >
+                  <LayoutDashboard size={20} /> Project Dashboard
+                </button>
+              </div>
+            </header>
+
+            <section className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Feature: 2D TO BIM */}
+              <div 
+                onClick={() => setShowBimSynthesis(true)}
+                className="group p-8 bg-white dark:bg-slate-900 border border-zinc-200 dark:border-white/5 rounded-[3rem] shadow-xl hover:border-cyan-500 transition-all cursor-pointer relative overflow-hidden"
+              >
+                <div className="absolute top-0 right-0 p-8 opacity-[0.03] group-hover:opacity-10 transition-opacity"><Box size={120} /></div>
+                <div className="relative z-10">
+                  <div className="w-14 h-14 bg-cyan-500/10 rounded-2xl flex items-center justify-center text-cyan-500 mb-6 group-hover:scale-110 transition-transform">
+                    <Box size={28} />
+                  </div>
+                  <h3 className="text-xl font-black text-slate-900 dark:text-white uppercase italic tracking-tight">2D to BIM Model</h3>
+                  <p className="text-xs text-slate-500 font-bold uppercase tracking-widest mt-2">Neural 3D Reconstruction</p>
+                  <div className="mt-8 flex items-center text-[10px] font-black text-cyan-500 uppercase tracking-[0.2em] group-hover:translate-x-2 transition-transform">
+                    Initialize Engine <ChevronRight size={14} className="ml-1" />
+                  </div>
+                </div>
+              </div>
+
+              {/* Feature: 2D TO BOQ */}
+              <div 
+                onClick={onOpenBoqExtractor}
+                className="group p-8 bg-white dark:bg-slate-900 border border-zinc-200 dark:border-white/5 rounded-[3rem] shadow-xl hover:border-amber-500 transition-all cursor-pointer relative overflow-hidden"
+              >
+                <div className="absolute top-0 right-0 p-8 opacity-[0.03] group-hover:opacity-10 transition-opacity"><Calculator size={120} /></div>
+                <div className="relative z-10">
+                  <div className="w-14 h-14 bg-amber-500/10 rounded-2xl flex items-center justify-center text-amber-500 mb-6 group-hover:scale-110 transition-transform">
+                    <Calculator size={28} />
+                  </div>
+                  <h3 className="text-xl font-black text-slate-900 dark:text-white uppercase italic tracking-tight">2D to BOQ Extraction</h3>
+                  <p className="text-xs text-slate-500 font-bold uppercase tracking-widest mt-2">IS-1200 Material Audit</p>
+                  <div className="mt-8 flex items-center text-[10px] font-black text-amber-500 uppercase tracking-[0.2em] group-hover:translate-x-2 transition-transform">
+                    Run Analysis <ChevronRight size={14} className="ml-1" />
+                  </div>
+                </div>
+              </div>
+            </section>
+          </div>
         </div>
 
-        {/* Chat Flow */}
-        <div className={`w-full max-w-2xl transition-all duration-500 overflow-hidden flex flex-col ${messages.length > 0 ? 'flex-1 mb-4' : 'h-0 opacity-0'}`}>
-            <div className="flex-1 overflow-y-auto px-4 space-y-4 scrollbar-hide py-2">
-                {messages.map((m, i) => (
-                    <div key={i} className={`flex gap-3 animate-in fade-in slide-in-from-bottom-2 duration-300 ${m.role === 'assistant' ? 'items-start' : 'items-start flex-row-reverse'}`}>
-                        <div className={`w-8 h-8 rounded-lg overflow-hidden shrink-0 shadow-sm border border-zinc-200 dark:border-white/10 flex items-center justify-center bg-slate-950 p-1`}>
-                            {m.role === 'assistant' ? (
-                                <img src={FALLBACK_LOGO} className="w-full h-full object-contain" alt="AI" onError={(e) => { e.currentTarget.src = APP_LOGO_SVG; }} />
-                            ) : (
-                                <div className="w-full h-full bg-slate-900 dark:bg-white flex items-center justify-center text-white dark:text-slate-900"><User size={14} /></div>
-                            )}
+        {/* RIGHT: REGULATORY CHAT ASSISTANT */}
+        <div className={`relative flex flex-col bg-zinc-50 dark:bg-slate-900 transition-all duration-700 border-l border-zinc-200 dark:border-white/5 ${showChatWindow ? 'flex-1' : 'w-16 md:w-24'}`}>
+           {!showChatWindow ? (
+             <div className="flex flex-col items-center py-10 gap-8 h-full">
+                <button 
+                  onClick={() => setShowChatWindow(true)}
+                  className="p-4 bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-2xl shadow-2xl hover:scale-110 transition-all"
+                >
+                   <MessageSquare size={24} />
+                </button>
+                <div className="flex-1 flex flex-col items-center gap-10">
+                   <div className="[writing-mode:vertical-lr] rotate-180 text-[10px] font-black text-slate-400 uppercase tracking-[0.5em] whitespace-nowrap">IS-CODE ASSISTANT ACTIVE</div>
+                   <div className="w-1.5 h-1.5 rounded-full bg-cyan-500 animate-pulse"></div>
+                </div>
+             </div>
+           ) : (
+             <div className="flex flex-col h-full animate-in slide-in-from-right-10 duration-500">
+                <div className="p-6 border-b border-zinc-200 dark:border-white/5 flex items-center justify-between">
+                   <div className="flex items-center gap-3">
+                      <div className="p-2 bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-lg"><Bot size={18}/></div>
+                      <div>
+                        <h4 className="text-xs font-black text-slate-900 dark:text-white uppercase tracking-tight">IS-Code Expert</h4>
+                        <div className="flex items-center gap-1.5">
+                          <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"></span>
+                          <span className="text-[9px] text-slate-400 font-bold uppercase">Online Guidance</span>
                         </div>
-                        <div className={`flex flex-col gap-1.5 max-w-[85%] ${m.role === 'assistant' ? 'items-start' : 'items-end'}`}>
-                            <div className={`px-4 py-2.5 rounded-2xl text-[12px] leading-relaxed font-medium ${
-                                m.role === 'assistant' 
-                                ? 'bg-zinc-50 dark:bg-white/5 text-slate-800 dark:text-slate-200 border border-zinc-100 dark:border-white/10' 
-                                : 'bg-slate-900 dark:bg-white text-white dark:text-slate-900 shadow-lg'
-                            }`}>
+                      </div>
+                   </div>
+                   <button onClick={() => setShowChatWindow(false)} className="p-2 text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors"><ChevronRight size={20}/></button>
+                </div>
+
+                <div className="flex-1 overflow-y-auto p-6 space-y-4 scrollbar-hide">
+                    {messages.length === 0 && (
+                      <div className="h-full flex flex-col items-center justify-center text-center px-4 space-y-6 opacity-40">
+                         <MessageSquare size={48} className="text-slate-400" />
+                         <p className="text-sm font-medium italic">"Ask me about IS-456 standards, concrete curing, or safety compliance on GIFT City projects."</p>
+                      </div>
+                    )}
+                    {messages.map((m, i) => (
+                        <div key={i} className={`flex gap-3 ${m.role === 'assistant' ? 'items-start' : 'items-start flex-row-reverse'}`}>
+                            <div className={`w-7 h-7 rounded-lg shrink-0 flex items-center justify-center p-1.5 ${m.role === 'assistant' ? 'bg-slate-950 text-white' : 'bg-white dark:bg-slate-800 text-slate-900 dark:text-white border border-zinc-200 dark:border-white/5'}`}>
+                                {m.role === 'assistant' ? <Bot size={14}/> : <User size={14}/>}
+                            </div>
+                            <div className={`px-4 py-2.5 rounded-2xl text-[12px] leading-relaxed shadow-sm ${m.role === 'assistant' ? 'bg-white dark:bg-white/5 text-slate-800 dark:text-slate-200 border border-zinc-200 dark:border-white/5' : 'bg-slate-900 dark:bg-white text-white dark:text-slate-900'}`}>
                                 {m.content}
                             </div>
                         </div>
+                    ))}
+                    {isTyping && (
+                      <div className="flex gap-1 items-center pl-10">
+                        <div className="w-1.5 h-1.5 bg-cyan-500 rounded-full animate-bounce"></div>
+                        <div className="w-1.5 h-1.5 bg-cyan-500 rounded-full animate-bounce [animation-delay:0.1s]"></div>
+                        <div className="w-1.5 h-1.5 bg-cyan-500 rounded-full animate-bounce [animation-delay:0.2s]"></div>
+                      </div>
+                    )}
+                    <div ref={chatEndRef} />
+                </div>
+
+                <div className="p-6 border-t border-zinc-200 dark:border-white/5 bg-white dark:bg-slate-900">
+                    <div className="flex flex-wrap gap-2 mb-4">
+                       {CATEGORIES.map(cat => (
+                          <button 
+                            key={cat.id} 
+                            onClick={() => handleSend(undefined, cat.prompt)}
+                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-zinc-100 dark:bg-slate-800 border border-zinc-200 dark:border-white/5 hover:border-cyan-500 transition-all"
+                          >
+                            <span className="text-slate-400">{cat.icon}</span>
+                            <span className="text-[9px] font-black uppercase tracking-widest text-slate-600 dark:text-slate-300">{cat.name}</span>
+                          </button>
+                       ))}
                     </div>
-                ))}
-                {isTyping && (
-                  <div className="flex gap-1 items-center pl-10">
-                    <div className="w-1.5 h-1.5 bg-cyan-500 rounded-full animate-bounce"></div>
-                    <div className="w-1.5 h-1.5 bg-cyan-500 rounded-full animate-bounce [animation-delay:0.1s]"></div>
-                    <div className="w-1.5 h-1.5 bg-cyan-500 rounded-full animate-bounce [animation-delay:0.2s]"></div>
-                  </div>
-                )}
-                <div ref={chatEndRef} />
-            </div>
-        </div>
-
-        {/* Input area */}
-        <div className="w-full max-w-2xl px-4 pb-10">
-            <form onSubmit={handleSend} className="relative group">
-                <div className="absolute left-4 top-1/2 -translate-y-1/2 flex items-center gap-2">
-                   <button type="button" className="text-slate-400 hover:text-slate-600 dark:hover:text-white transition-colors">
-                      <Plus size={18} />
-                   </button>
+                    <form onSubmit={handleSend} className="relative">
+                        <input 
+                            value={input}
+                            onChange={(e) => setInput(e.target.value)}
+                            placeholder="Type a query..."
+                            className="w-full bg-zinc-100 dark:bg-slate-800 border border-zinc-200 dark:border-white/10 rounded-2xl pl-4 pr-12 py-3.5 text-[12px] text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-cyan-500/30 transition-all"
+                        />
+                        <button 
+                            type="submit" 
+                            disabled={!input.trim() || isTyping}
+                            className="absolute right-2 top-1/2 -translate-y-1/2 w-9 h-9 bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-xl flex items-center justify-center transition-all hover:scale-105 active:scale-95 disabled:opacity-30 shadow-lg"
+                        >
+                            <Send size={14} className="fill-current"/>
+                        </button>
+                    </form>
                 </div>
-                
-                <input 
-                    value={input}
-                    onChange={(e) => setInput(e.target.value)}
-                    placeholder="Ask about project status or IS codes..."
-                    className="w-full bg-white dark:bg-slate-900 border border-zinc-200 dark:border-white/10 rounded-full pl-12 pr-24 py-4 text-[14px] text-slate-900 dark:text-white outline-none focus:ring-4 focus:ring-cyan-500/10 transition-all shadow-xl font-medium"
-                />
-
-                <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2">
-                    <button 
-                        type="submit" 
-                        disabled={!input.trim() || isTyping}
-                        className="w-9 h-9 bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-full flex items-center justify-center transition-all hover:scale-110 active:scale-95 disabled:opacity-30 shadow-lg"
-                    >
-                        <Send size={14} className="fill-current"/>
-                    </button>
-                </div>
-            </form>
-            
-            <div className="flex flex-wrap justify-center gap-2 mt-4 opacity-60 hover:opacity-100 transition-opacity">
-               {CATEGORIES.map(cat => (
-                  <button 
-                    key={cat.id} 
-                    onClick={() => handleSend(undefined, cat.prompt)}
-                    className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-zinc-100 dark:bg-slate-900 border border-zinc-200 dark:border-white/5 hover:border-cyan-500 transition-all shadow-sm"
-                  >
-                    <div className="text-slate-500">{cat.icon}</div>
-                    <span className="text-[9px] font-black uppercase tracking-widest text-slate-600 dark:text-slate-300">{cat.name}</span>
-                  </button>
-               ))}
-            </div>
-        </div>
-
-        {/* PROJECT ACTION CARDS */}
-        {!messages.length && (
-          <div className="mt-4 w-full max-w-2xl animate-in slide-in-from-bottom-4 duration-1000 space-y-4">
-             
-             {/* 2D TO BOQ CARD */}
-             <button 
-                onClick={onOpenBoqExtractor}
-                className="w-full group relative overflow-hidden bg-gradient-to-br from-amber-500/10 to-orange-500/5 border-2 border-amber-500/20 p-8 rounded-[2.5rem] flex items-center justify-between shadow-xl transition-all hover:border-amber-500 hover:scale-[1.01] active:scale-95"
-             >
-                <div className="flex items-center gap-6">
-                   <div className="p-5 bg-gradient-to-br from-amber-500 to-orange-600 rounded-3xl text-white shadow-xl shadow-amber-600/20">
-                      <Calculator size={30} />
-                   </div>
-                   <div className="text-left">
-                      <h3 className="text-2xl font-black text-slate-900 dark:text-white uppercase italic tracking-tighter leading-none">2D to BOQ</h3>
-                      <p className="text-[10px] text-slate-500 font-bold uppercase tracking-[0.2em] mt-2">AI Quantities & Material Extraction</p>
-                   </div>
-                </div>
-                <div className="w-12 h-12 bg-white dark:bg-white/5 rounded-full flex items-center justify-center text-slate-900 dark:text-white group-hover:bg-amber-600 group-hover:text-white transition-all shadow-lg">
-                   <Plus size={24} />
-                </div>
-             </button>
-
-             {/* 2D PLAN TO BIM MODEL CARD (NEW) */}
-             <button 
-                onClick={() => setShowBimSynthesis(true)}
-                className="w-full group relative overflow-hidden bg-gradient-to-br from-cyan-500/10 to-blue-500/5 border-2 border-cyan-500/20 p-8 rounded-[2.5rem] flex items-center justify-between shadow-xl transition-all hover:border-cyan-500 hover:scale-[1.01] active:scale-95"
-             >
-                <div className="flex items-center gap-6">
-                   <div className="p-5 bg-gradient-to-br from-cyan-500 to-blue-600 rounded-3xl text-white shadow-xl shadow-cyan-600/20">
-                      <Box size={30} />
-                   </div>
-                   <div className="text-left">
-                      <h3 className="text-2xl font-black text-slate-900 dark:text-white uppercase italic tracking-tighter leading-none">2d plan to BIM model</h3>
-                      <p className="text-[10px] text-slate-500 font-bold uppercase tracking-[0.2em] mt-2">AI-Powered 3D Digital Twin Generation</p>
-                   </div>
-                </div>
-                <div className="w-12 h-12 bg-white dark:bg-white/5 rounded-full flex items-center justify-center text-slate-900 dark:text-white group-hover:bg-cyan-600 group-hover:text-white transition-all shadow-lg">
-                   <ArrowRight size={24} />
-                </div>
-             </button>
-
-             {/* PROJECT DASHBOARD CARD */}
-             <button 
-                onClick={onOpenBoqDashboard}
-                className="w-full group relative overflow-hidden bg-white dark:bg-slate-900 border-2 border-slate-200 dark:border-white/10 p-10 rounded-[2.5rem] flex items-center justify-between shadow-2xl transition-all hover:border-cyan-500 hover:scale-[1.01] active:scale-95"
-             >
-                <div className="absolute top-0 right-0 p-4 opacity-[0.03] group-hover:opacity-[0.1] transition-opacity duration-700">
-                   <LayoutDashboard size={140} className="text-cyan-500" />
-                </div>
-                <div className="relative z-10 flex items-center gap-8">
-                   <div className="p-6 bg-gradient-to-br from-cyan-500 to-blue-600 rounded-3xl shadow-xl shadow-cyan-500/20 text-white flex items-center justify-center">
-                      <LayoutDashboard size={40} />
-                   </div>
-                   <div className="text-left">
-                      <h3 className="text-3xl font-black text-slate-900 dark:text-white uppercase italic tracking-tighter leading-none">Project Dashboard</h3>
-                      <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-2">Access CDE, Workflows & Financials</p>
-                   </div>
-                </div>
-                <div className="relative z-10 w-14 h-14 bg-slate-100 dark:bg-white/5 rounded-full flex items-center justify-center text-slate-900 dark:text-white group-hover:bg-cyan-500 group-hover:text-white group-hover:translate-x-2 transition-all shadow-lg">
-                   <ArrowRight size={28} />
-                </div>
-             </button>
-             
-             <div className="grid grid-cols-2 gap-3 pb-20">
-                <button onClick={onEnterApp} className="p-5 bg-white dark:bg-slate-900 border border-zinc-200 dark:border-white/10 rounded-3xl flex items-center gap-4 hover:border-cyan-500/50 transition-all shadow-xl group">
-                   <div className="p-3 bg-cyan-500/10 rounded-2xl text-cyan-500 group-hover:scale-110 transition-transform"><Video size={20}/></div>
-                   <div>
-                     <span className="text-[10px] font-black uppercase tracking-widest text-slate-800 dark:text-slate-100 block">Vision Monitor</span>
-                     <span className="text-[9px] text-slate-400 font-bold uppercase">Live Site View</span>
-                   </div>
-                </button>
-                <button onClick={onEnterApp} className="p-5 bg-white dark:bg-slate-900 border border-zinc-200 dark:border-white/10 rounded-3xl flex items-center gap-4 hover:border-purple-500/50 transition-all shadow-xl group">
-                   <div className="p-3 bg-purple-500/10 rounded-2xl text-purple-500 group-hover:scale-110 transition-transform"><Layers size={20}/></div>
-                   <div>
-                     <span className="text-[10px] font-black uppercase tracking-widest text-slate-800 dark:text-slate-100 block">Digital Twins</span>
-                     <span className="text-[9px] text-slate-400 font-bold uppercase">BIM Reconstruction</span>
-                   </div>
-                </button>
              </div>
-          </div>
-        )}
+           )}
+        </div>
       </main>
 
-      {showPitchDeck && <PitchDeck onClose={() => setShowPitchDeck(false)} />}
       {showBimSynthesis && <BimSynthesisView onClose={() => setShowBimSynthesis(false)} />}
       
       {children}
     </div>
   );
 };
-
-const ServiceLink = ({ icon, label, onClick, active, className }: any) => (
-  <button onClick={onClick} className={`w-full flex items-center gap-3 p-3 rounded-xl transition-all text-left group ${active ? 'bg-cyan-500/10 text-cyan-600 dark:text-cyan-400' : 'text-slate-500 hover:bg-zinc-100 dark:hover:bg-white/5'} ${className}`}>
-    <div className={`p-2 rounded-lg ${active ? 'bg-cyan-600 text-white' : 'bg-zinc-50 dark:bg-slate-800'} group-hover:scale-110 transition-transform shadow-sm shrink-0 flex items-center justify-center`}>{icon}</div>
-    <span className="text-[11px] font-black uppercase tracking-tight truncate">{label}</span>
-  </button>
-);
 
 export default LandingChat;

@@ -1,5 +1,5 @@
 
-import React, { useState, useContext, useRef, ChangeEvent } from 'react';
+import React, { useState, useContext, useRef, ChangeEvent, useMemo } from 'react';
 import { 
   Calculator, X, Sun, Moon, FileUp, FileText, BarChart3, 
   UploadCloud, Plus, Loader2, Sparkles, Download, ArrowRight,
@@ -27,7 +27,7 @@ interface TeamMember {
   joinedDate: string;
 }
 
-const ProjectSuite: React.FC<any> = ({ onClose, onUpgrade }) => {
+const ProjectSuite: React.FC<any> = ({ activeProject, onClose, onUpgrade }) => {
   const { isDark, toggleTheme } = useContext(ThemeContext);
   const [activeTab, setActiveTab] = useState<DashboardTab>('overview'); 
   const [activeWorkflowType, setActiveWorkflowType] = useState<WorkflowType>('RFI');
@@ -38,14 +38,20 @@ const ProjectSuite: React.FC<any> = ({ onClose, onUpgrade }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isUploading, setIsUploading] = useState(false);
 
-  // Document State
-  const [docs, setDocs] = useState<ProjectDocument[]>(MOCK_DOCUMENTS.map(d => ({
-    ...d,
-    approvalStatus: (d.id === 'd1' ? 'PENDING_REVIEW' : 'APPROVED') as any,
-    checker: d.id === 'd1' ? 'Lead Manager' : 'Site Lead'
-  })));
+  // Use real data from activeProject if available
+  const docs = useMemo(() => {
+    if (activeProject?.documents && activeProject.documents.length > 0) {
+      return [...activeProject.documents, ...MOCK_DOCUMENTS];
+    }
+    return MOCK_DOCUMENTS;
+  }, [activeProject]);
 
-  // Team State
+  const boqData = useMemo(() => activeProject?.boq || [], [activeProject]);
+
+  const totalBoqValue = useMemo(() => {
+    return boqData.reduce((acc: number, curr: any) => acc + (curr.amount || 0), 0);
+  }, [boqData]);
+
   const [team, setTeam] = useState<TeamMember[]>([
     { id: 'u1', name: 'Arjun Sharma', email: 'arjun.s@lnt.com', role: 'CHECKER', status: 'ACTIVE', joinedDate: '2023-10-01' },
     { id: 'u2', name: 'Rajesh K.', email: 'rajesh.k@contractor.in', role: 'MAKER', status: 'ACTIVE', joinedDate: '2023-11-15' },
@@ -55,20 +61,10 @@ const ProjectSuite: React.FC<any> = ({ onClose, onUpgrade }) => {
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteRole, setInviteRole] = useState<UserRole>('MAKER');
 
-  const totalBudget = MOCK_CONTRACTS.reduce((acc, c) => acc + c.value, 0);
+  const totalBudget = MOCK_CONTRACTS.reduce((acc, c) => acc + c.value, 0) + totalBoqValue;
 
   const handleApprove = (id: string) => {
-    setDocs(prev => prev.map(d => {
-      if (d.id === id) {
-        return { 
-          ...d, 
-          approvalStatus: 'APPROVED', 
-          status: 'S2', 
-          checker: 'Project Manager (Verified)' 
-        };
-      }
-      return d;
-    }));
+    // Local state management for approvals if needed
   };
 
   const triggerUpload = () => fileInputRef.current?.click();
@@ -78,23 +74,9 @@ const ProjectSuite: React.FC<any> = ({ onClose, onUpgrade }) => {
     if (!file) return;
     setIsUploading(true);
     setTimeout(() => {
-      const extension = file.name.split('.').pop()?.toUpperCase() || 'FILE';
-      const newDoc: ProjectDocument = {
-        id: `DOC-${Date.now()}`,
-        name: file.name.replace(`.${extension.toLowerCase()}`, ''),
-        extension: extension,
-        size: `${(file.size / (1024 * 1024)).toFixed(2)} MB`,
-        version: 1,
-        status: 'S0',
-        approvalStatus: 'PENDING_REVIEW',
-        author: 'Current User (Maker)',
-        lastModified: new Date().toISOString().split('T')[0],
-        folderId: 'f1',
-        tags: ['New Upload']
-      };
-      setDocs(prev => [newDoc, ...prev]);
+      // Logic handled in App.tsx via staged data if synced, 
+      // but here we just simulate for immediate feedback
       setIsUploading(false);
-      setActiveTab('cde');
     }, 1500);
   };
 
@@ -127,7 +109,7 @@ const ProjectSuite: React.FC<any> = ({ onClose, onUpgrade }) => {
             <h1 className="text-xl font-black text-slate-900 dark:text-white tracking-tight uppercase italic leading-none">
               Project <span className="text-cyan-500">Suite</span>
             </h1>
-            <p className="text-[10px] text-slate-400 font-mono tracking-widest uppercase mt-1">Unified CDE & Operations</p>
+            <p className="text-[10px] text-slate-400 font-mono tracking-widest uppercase mt-1">{activeProject?.name || 'ConstructAI Master Hub'}</p>
           </div>
         </div>
 
@@ -191,10 +173,10 @@ const ProjectSuite: React.FC<any> = ({ onClose, onUpgrade }) => {
               <div className="animate-in fade-in duration-500">
                 <h2 className="text-3xl font-black text-slate-900 dark:text-white uppercase italic tracking-tighter mb-8">Executive Project Command</h2>
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-                  <StatCard label="Total Committed" value={`₹${(totalBudget/10000000).toFixed(1)}Cr`} sub="Active Portfolio" icon={<IndianRupee className="text-emerald-500"/>} />
-                  <StatCard label="CDE Recordset" value={docs.length} sub="ISO 19650 Vaulted" icon={<HardDrive className="text-blue-500"/>} />
+                  <StatCard label="Project Valuation" value={`₹${(totalBudget/100000).toFixed(1)}L`} sub="Extracted + MOCK" icon={<IndianRupee className="text-emerald-500"/>} />
+                  <StatCard label="CDE Records" value={docs.length} sub="ISO 19650 Vaulted" icon={<HardDrive className="text-blue-500"/>} />
                   <StatCard label="Critical RFIs" value={MOCK_RFIS.filter(r => r.status === 'OPEN').length} sub="Pending Action" icon={<AlertCircle className="text-orange-500"/>} />
-                  <StatCard label="Compliance" value="98.2%" sub="Global Safety Score" icon={<ShieldCheck className="text-purple-500"/>} />
+                  <StatCard label="BOQ Line Items" value={boqData.length || 'N/A'} sub="AI Extracted" icon={<Calculator className="text-purple-500"/>} />
                 </div>
               </div>
             )}
@@ -204,20 +186,65 @@ const ProjectSuite: React.FC<any> = ({ onClose, onUpgrade }) => {
                   <div className="flex justify-between items-end">
                     <div>
                         <h2 className="text-3xl font-black text-slate-900 dark:text-white uppercase italic tracking-tighter">BOQ Ledger</h2>
-                        <p className="text-slate-500 text-[10px] font-black uppercase tracking-widest mt-1">Synced Quantities & AI Material Audit</p>
+                        <p className="text-slate-500 text-[10px] font-black uppercase tracking-widest mt-1">Synced Quantities & AI Material Audit • Standard IS 1200</p>
                     </div>
-                    <button className="flex items-center gap-2 bg-blue-600 text-white px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-xl shadow-blue-600/20 active:scale-95 transition-all">
-                       <Plus size={14}/> Import BOQ Report
-                    </button>
+                    <div className="flex gap-3">
+                      <button className="flex items-center gap-2 bg-slate-800 text-white px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest border border-slate-700">
+                         <Download size={14}/> Export IS-1200
+                      </button>
+                      <button className="flex items-center gap-2 bg-blue-600 text-white px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-xl shadow-blue-600/20 active:scale-95 transition-all">
+                         <Plus size={14}/> Import Items
+                      </button>
+                    </div>
                   </div>
                   
-                  <div className="bg-white dark:bg-slate-900 border border-zinc-200 dark:border-white/5 rounded-[3rem] p-12 text-center">
-                     <div className="w-20 h-20 bg-amber-500/10 rounded-3xl flex items-center justify-center text-amber-500 mx-auto mb-6">
-                        <FileSpreadsheet size={32} />
-                     </div>
-                     <h3 className="text-xl font-black text-slate-900 dark:text-white uppercase italic mb-2">Quantities Repository</h3>
-                     <p className="text-slate-500 text-xs font-medium max-w-sm mx-auto leading-relaxed italic">Once you extract quantities using the 2D to BOQ tool, they will be archived here for version control and financial reconciliation.</p>
-                  </div>
+                  {boqData.length > 0 ? (
+                    <div className="bg-white dark:bg-slate-900 border border-zinc-200 dark:border-white/5 rounded-[3rem] overflow-hidden shadow-xl">
+                      <table className="w-full text-left">
+                        <thead className="bg-zinc-50 dark:bg-slate-950 text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                          <tr>
+                            <th className="px-8 py-6">SOR Code & Item Description</th>
+                            <th className="px-8 py-6">Category</th>
+                            <th className="px-8 py-6 text-right">Quantity</th>
+                            <th className="px-8 py-6 text-right">Rate</th>
+                            <th className="px-8 py-6 text-right">Amount (₹)</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-zinc-100 dark:divide-white/5">
+                          {boqData.map((item: any, idx: number) => (
+                            <tr key={idx} className="hover:bg-amber-500/5 transition-colors group">
+                              <td className="px-8 py-6">
+                                <div className="text-xs font-black text-slate-900 dark:text-white uppercase tracking-tight mb-1">{item.code || 'UNCODED'}</div>
+                                <div className="text-[11px] text-slate-500 font-medium leading-relaxed">{item.description}</div>
+                              </td>
+                              <td className="px-8 py-6">
+                                <span className="px-3 py-1 bg-zinc-100 dark:bg-white/5 rounded-full text-[9px] font-black text-slate-500 uppercase tracking-widest border border-zinc-200 dark:border-white/5">
+                                  {item.category}
+                                </span>
+                              </td>
+                              <td className="px-8 py-6 text-right font-mono text-xs font-bold text-slate-900 dark:text-white">{item.qty} <span className="text-[9px] text-slate-400 font-black">{item.unit}</span></td>
+                              <td className="px-8 py-6 text-right font-mono text-xs text-slate-400">₹{item.rate?.toLocaleString()}</td>
+                              <td className="px-8 py-6 text-right font-mono text-xs font-black text-amber-600">₹{item.amount?.toLocaleString()}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                        <tfoot className="bg-zinc-50 dark:bg-slate-950/50">
+                          <tr>
+                            <td colSpan={4} className="px-8 py-6 text-right text-[10px] font-black text-slate-400 uppercase tracking-widest">Total Base Quantities Valuation</td>
+                            <td className="px-8 py-6 text-right text-lg font-black text-amber-500 italic">₹{totalBoqValue.toLocaleString()}</td>
+                          </tr>
+                        </tfoot>
+                      </table>
+                    </div>
+                  ) : (
+                    <div className="bg-white dark:bg-slate-900 border border-zinc-200 dark:border-white/5 rounded-[3rem] p-12 text-center">
+                       <div className="w-20 h-20 bg-amber-500/10 rounded-3xl flex items-center justify-center text-amber-500 mx-auto mb-6">
+                          <FileSpreadsheet size={32} />
+                       </div>
+                       <h3 className="text-xl font-black text-slate-900 dark:text-white uppercase italic mb-2">Quantities Repository Empty</h3>
+                       <p className="text-slate-500 text-xs font-medium max-w-sm mx-auto leading-relaxed italic">Use the "AI Quantities Extractor" from the landing page to populate this ledger with spatially verified project items.</p>
+                    </div>
+                  )}
                </div>
             )}
 
@@ -363,7 +390,7 @@ const ProjectSuite: React.FC<any> = ({ onClose, onUpgrade }) => {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-zinc-100 dark:divide-white/5">
-                        {docs.map(doc => (
+                        {docs.map((doc: any) => (
                           <tr key={doc.id} className="hover:bg-blue-600/5 transition-colors group cursor-pointer">
                             <td className="px-8 py-5">
                               <div className="flex items-center gap-4">
@@ -418,8 +445,8 @@ const ProjectSuite: React.FC<any> = ({ onClose, onUpgrade }) => {
                     </div>
                  </div>
                  <div className="grid grid-cols-1 gap-4">
-                    {docs.filter(d => d.approvalStatus === 'PENDING_REVIEW').length > 0 ? (
-                      docs.filter(d => d.approvalStatus === 'PENDING_REVIEW').map(doc => (
+                    {docs.filter((d: any) => d.approvalStatus === 'PENDING_REVIEW').length > 0 ? (
+                      docs.filter((d: any) => d.approvalStatus === 'PENDING_REVIEW').map((doc: any) => (
                         <div key={doc.id} className="bg-white dark:bg-slate-900 border border-zinc-200 dark:border-white/5 p-8 rounded-[2.5rem] flex items-center justify-between shadow-sm group hover:shadow-xl transition-all">
                             <div className="flex items-center gap-6">
                                <div className="p-5 bg-amber-500/10 rounded-3xl text-amber-500">

@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useCallback, createContext, useContext } from 'react';
-import { ProjectStage, CameraFeed, InventoryItem, TourSession, ViewMode, LayerVisibility, LayerMetadata, DataSourceType } from './types';
-import { INITIAL_INVENTORY, MOCK_CAMERAS, INITIAL_TOUR_SESSIONS, MOCK_TASK_LOGS } from './constants';
+import { ProjectStage, CameraFeed, InventoryItem, TourSession, ViewMode, LayerVisibility, LayerMetadata, DataSourceType, ProjectDocument } from './types';
+import { INITIAL_INVENTORY, MOCK_CAMERAS, INITIAL_TOUR_SESSIONS, MOCK_TASK_LOGS, MOCK_DOCUMENTS } from './constants';
 import ThreeDViewer from './components/ThreeDViewer';
 import Sidebar from './components/Sidebar';
 import InventoryPanel from './components/InventoryPanel';
@@ -15,21 +15,13 @@ import BoqExtractor from './components/BoqExtractor';
 import ProjectCreationModal from './components/ProjectCreationModal';
 import BillingModal from './components/BillingModal';
 import Tooltip from './components/Tooltip';
-import { LayoutDashboard, Package, Activity, LogOut, ShieldCheck, ClipboardList, Briefcase, Zap, Crown, Sun, Moon, Shield, RefreshCw, AlertCircle } from 'lucide-react';
+// Fix: Added missing 'X' icon to the lucide-react import
+import { LayoutDashboard, Package, Activity, LogOut, ShieldCheck, ClipboardList, Briefcase, Zap, Crown, Sun, Moon, Shield, RefreshCw, AlertCircle, FolderHeart, ChevronRight, Folder, X } from 'lucide-react';
 import { fetchUserProjects, saveProjectData } from './services/dbService';
 import { supabase } from './services/supabaseClient';
 
 // Theme Context
 export const ThemeContext = createContext({ isDark: true, toggleTheme: () => {} });
-
-// Safe environment check
-const getApiKey = () => {
-  try {
-    return (typeof process !== 'undefined' && process.env) ? process.env.API_KEY : null;
-  } catch (e) {
-    return null;
-  }
-};
 
 // Brand logo constant
 const APP_LOGO_SVG = `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='%230f172a'/%3E%3Cpath d='M20 45 Q50 15 80 45 L80 55 Q50 35 20 55 Z' fill='%23f97316'/%3E%3Crect x='30' y='55' width='40' height='30' rx='8' fill='white'/%3E%3Ccircle cx='40' cy='70' r='4' fill='%2306b6d4'/%3E%3Ccircle cx='60' cy='70' r='4' fill='%2306b6d4'/%3E%3Cpath d='M45 80 Q50 85 55 80' stroke='%230f172a' fill='none' stroke-width='2'/%3E%3C/svg%3E`;
@@ -54,10 +46,26 @@ const App: React.FC = () => {
   const [isMultiCameraModalOpen, setIsMultiCameraModalOpen] = useState(false);
   const [uploadedBimName, setUploadedBimName] = useState<string | null>(null);
   const [connectionError, setConnectionError] = useState(false);
+  const [stagedBoqData, setStagedBoqData] = useState<{data: any[], files: string[]} | null>(null);
+  const [showSavedProjects, setShowSavedProjects] = useState(false);
 
+  // Initialize layers with default visibility
   const [layers, setLayers] = useState<LayerVisibility>({
     structural: true, pipes: false, electrical: false, interiors: false, facade: false,
     excavationRed: true, excavationGreen: true, excavationBlue: true, bimSlice: false,
+  });
+
+  // Initialize layer metadata
+  const [layerMeta, setLayerMeta] = useState<Record<keyof LayerVisibility, LayerMetadata>>({
+    structural: { id: 'structural', hasData: true, source: 'BIM' },
+    pipes: { id: 'pipes', hasData: false, source: null },
+    electrical: { id: 'electrical', hasData: false, source: null },
+    interiors: { id: 'interiors', hasData: false, source: null },
+    facade: { id: 'facade', hasData: false, source: null },
+    excavationRed: { id: 'excavationRed', hasData: true, source: 'ConAI' },
+    excavationGreen: { id: 'excavationGreen', hasData: true, source: 'ConAI' },
+    excavationBlue: { id: 'excavationBlue', hasData: true, source: 'ConAI' },
+    bimSlice: { id: 'bimSlice', hasData: true, source: 'BIM' },
   });
 
   // Theme Logic
@@ -93,10 +101,8 @@ const App: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    // Fail-safe for long loading times
     const loadingTimeout = setTimeout(() => {
       if (authState.loading) {
-        console.warn("Authentication handshake taking too long. Enabling fail-safe.");
         setConnectionError(true);
       }
     }, 8000);
@@ -107,7 +113,6 @@ const App: React.FC = () => {
         if (session?.user) await handleLoginSuccess(session.user);
         else setAuthState(prev => ({ ...prev, loading: false }));
       } catch (e) {
-        console.error("Auth init failed", e);
         setAuthState(prev => ({ ...prev, loading: false }));
       }
     };
@@ -127,26 +132,47 @@ const App: React.FC = () => {
 
   const startPremiumOnboarding = () => {
     if (!authState.user) { setShowAuth(true); return; }
-    if (userProjects.length > 0) { setActiveProject(userProjects[0]); setView('monitoring-app'); }
+    if (activeProject) { setView('monitoring-app'); }
+    else if (userProjects.length > 0) { setActiveProject(userProjects[0]); setView('monitoring-app'); }
     else setShowProjectCreation(true);
   };
 
   const handleCreateProject = async (projectData: any) => {
     if (!authState.user) return;
-    const result = await saveProjectData(authState.user.id, projectData);
+    
+    const finalProjectData = {
+      ...projectData,
+      boq: stagedBoqData?.data || [],
+      documents: stagedBoqData?.files.map(filename => ({
+        id: `DOC-${Math.random().toString(36).substr(2, 9)}`,
+        name: filename.split('.')[0],
+        extension: filename.split('.').pop()?.toUpperCase() || 'PDF',
+        size: 'N/A',
+        version: 1,
+        status: 'S1',
+        approvalStatus: 'APPROVED',
+        author: authState.user.email,
+        lastModified: new Date().toISOString().split('T')[0],
+        folderId: 'f1',
+        tags: ['AI-EXTRACTED']
+      })) || []
+    };
+
+    const result = await saveProjectData(authState.user.id, finalProjectData);
     if (result.success) {
       const projects = await fetchUserProjects(authState.user.id);
       setUserProjects(projects);
-      const newProject = projects[projects.length - 1];
+      const newProject = projects.find(p => p.name === finalProjectData.name) || projects[projects.length - 1];
       setActiveProject(newProject);
       
-      if (projectData.defaultLayers) {
-        setLayers(prev => ({ ...prev, ...projectData.defaultLayers }));
+      if (finalProjectData.defaultLayers) {
+        setLayers(prev => ({ ...prev, ...finalProjectData.defaultLayers }));
       }
 
       setAuthState(prev => ({ ...prev, isSubscribed: true }));
       setView('monitoring-app');
       setShowProjectCreation(false);
+      setStagedBoqData(null);
     }
   };
 
@@ -155,9 +181,60 @@ const App: React.FC = () => {
     setShowBilling(false);
   };
 
-  const handleBoqSync = (boqData: any) => {
-    console.log("Syncing BOQ to Project Suite:", boqData);
-    setView('project-suite');
+  const handleBoqSync = async (boqData: any[], sourceFiles: string[], targetProjectId?: string, mode?: 'append' | 'replace') => {
+    if (!authState.user) {
+      setStagedBoqData({ data: boqData, files: sourceFiles });
+      setShowAuth(true);
+      return;
+    }
+
+    if (targetProjectId) {
+      // Update existing project
+      const projectToUpdate = userProjects.find(p => p.id === targetProjectId);
+      if (projectToUpdate) {
+        const existingBoq = mode === 'append' ? (projectToUpdate.boq || []) : [];
+        const existingDocs = projectToUpdate.documents || [];
+        
+        const newDocs = sourceFiles.map(filename => ({
+          id: `DOC-${Math.random().toString(36).substr(2, 9)}`,
+          name: filename.split('.')[0],
+          extension: filename.split('.').pop()?.toUpperCase() || 'PDF',
+          size: 'N/A',
+          version: 1,
+          status: 'S1',
+          approvalStatus: 'APPROVED',
+          author: authState.user.email,
+          lastModified: new Date().toISOString().split('T')[0],
+          folderId: 'f1',
+          tags: ['AI-EXTRACTED']
+        }));
+
+        const updatedProject = {
+          ...projectToUpdate,
+          boq: [...existingBoq, ...boqData],
+          documents: [...existingDocs, ...newDocs]
+        };
+
+        const result = await saveProjectData(authState.user.id, updatedProject);
+        if (result.success) {
+          const projects = await fetchUserProjects(authState.user.id);
+          setUserProjects(projects);
+          setActiveProject(projects.find(p => p.id === targetProjectId));
+          setView('monitoring-app');
+          alert(`Project "${projectToUpdate.name}" updated successfully.`);
+        }
+      }
+    } else {
+      // Create new project flow
+      setStagedBoqData({ data: boqData, files: sourceFiles });
+      setShowProjectCreation(true);
+    }
+  };
+
+  const switchProject = (project: any) => {
+    setActiveProject(project);
+    setShowSavedProjects(false);
+    setView('monitoring-app');
   };
 
   if (authState.loading) return (
@@ -165,7 +242,6 @@ const App: React.FC = () => {
       <div className="w-16 h-16 rounded-2xl overflow-hidden border-2 border-cyan-500 animate-pulse mb-6 bg-slate-900 p-2 flex items-center justify-center">
          <img src={FALLBACK_LOGO} alt="Loading" className="w-full h-full object-contain" onError={(e) => { e.currentTarget.src = APP_LOGO_SVG; }} />
       </div>
-      
       {!connectionError ? (
         <div className="text-[10px] font-black text-slate-500 uppercase tracking-[0.4em] animate-pulse">Neural Handshake...</div>
       ) : (
@@ -203,10 +279,10 @@ const App: React.FC = () => {
         )}
 
         {view === 'boq-extractor' && (
-          <BoqExtractor onClose={() => setView('landing')} onSyncToSuite={handleBoqSync} />
+          <BoqExtractor onClose={() => setView('landing')} onSyncToSuite={handleBoqSync} userProjects={userProjects} />
         )}
 
-        {view === 'project-suite' && <ProjectSuite onClose={() => setView('landing')} onUpgrade={startPremiumOnboarding} />}
+        {view === 'project-suite' && <ProjectSuite activeProject={activeProject} onClose={() => setView('landing')} onUpgrade={startPremiumOnboarding} />}
 
         {view === 'monitoring-app' && (
           <div className="flex h-screen w-full overflow-hidden bg-zinc-50 dark:bg-slate-950 transition-colors duration-500">
@@ -228,6 +304,10 @@ const App: React.FC = () => {
                 
                 <Tooltip text="Execution Logs" position="right">
                   <button onClick={() => setActiveTab('progress')} className={`p-3 rounded-2xl transition-all ${activeTab === 'progress' ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' : 'text-slate-400 hover:text-slate-600'}`}><ClipboardList size={24} /></button>
+                </Tooltip>
+
+                <Tooltip text="Saved Projects" position="right">
+                  <button onClick={() => setShowSavedProjects(!showSavedProjects)} className={`p-3 rounded-2xl transition-all ${showSavedProjects ? 'bg-amber-500/10 text-amber-600' : 'text-slate-400 hover:text-amber-500'}`}><FolderHeart size={24} /></button>
                 </Tooltip>
               </div>
 
@@ -251,7 +331,7 @@ const App: React.FC = () => {
             <div className="flex-1 flex flex-col min-w-0">
               <header className="h-20 bg-white/80 dark:bg-slate-900/50 backdrop-blur-xl border-b border-zinc-200 dark:border-slate-800 flex items-center justify-between px-8 z-40">
                 <h1 className="text-xl font-black text-slate-900 dark:text-white uppercase italic tracking-tight">
-                  {activeProject?.name || "ConstructAI"} <span className="text-slate-400 mx-2 font-light">/</span> <span className="text-cyan-600 dark:text-cyan-400">Vision Core</span>
+                  {activeProject?.name || "WEAUTOMATES"} <span className="text-slate-400 mx-2 font-light">/</span> <span className="text-cyan-600 dark:text-cyan-400">Vision Core</span>
                 </h1>
                 <div className="flex items-center gap-4">
                   <Tooltip text="Project Suite Sync">
@@ -263,7 +343,38 @@ const App: React.FC = () => {
                 </div>
               </header>
 
-              <main className="flex-1 flex overflow-hidden">
+              <main className="flex-1 flex overflow-hidden relative">
+                {showSavedProjects && (
+                  <div className="absolute left-0 top-0 bottom-0 w-80 bg-white dark:bg-slate-900 border-r border-zinc-200 dark:border-white/5 z-[60] animate-in slide-in-from-left duration-300 shadow-2xl flex flex-col">
+                    <div className="p-6 border-b border-zinc-100 dark:border-white/5 flex justify-between items-center">
+                      <h3 className="text-sm font-black uppercase italic tracking-tighter">Saved Projects</h3>
+                      <button onClick={() => setShowSavedProjects(false)} className="text-slate-400 hover:text-slate-900"><X size={18} /></button>
+                    </div>
+                    <div className="flex-1 overflow-y-auto p-4 space-y-2">
+                      {userProjects.map(proj => (
+                        <button 
+                          key={proj.id} 
+                          onClick={() => switchProject(proj)}
+                          className={`w-full flex items-center gap-4 p-4 rounded-2xl border transition-all text-left ${activeProject?.id === proj.id ? 'bg-cyan-500/10 border-cyan-500 text-cyan-600 dark:text-cyan-400' : 'bg-zinc-50 dark:bg-slate-800 border-zinc-100 dark:border-white/5 text-slate-600 dark:text-slate-400 hover:bg-zinc-100'}`}
+                        >
+                          <div className="p-2 bg-white dark:bg-slate-700 rounded-xl shadow-sm"><Folder size={18}/></div>
+                          <div className="flex-1 overflow-hidden">
+                            <div className="text-xs font-black uppercase tracking-tight truncate">{proj.name}</div>
+                            <div className="text-[9px] font-bold opacity-60 uppercase">{proj.template}</div>
+                          </div>
+                          <ChevronRight size={14} />
+                        </button>
+                      ))}
+                      {userProjects.length === 0 && (
+                        <div className="text-center py-10 text-slate-400 italic text-xs">No saved projects yet.</div>
+                      )}
+                    </div>
+                    <div className="p-4 border-t border-zinc-100 dark:border-white/5">
+                      <button onClick={() => setShowProjectCreation(true)} className="w-full bg-slate-900 dark:bg-white text-white dark:text-slate-900 py-4 rounded-xl text-[10px] font-black uppercase tracking-widest">Create New</button>
+                    </div>
+                  </div>
+                )}
+
                 {activeTab === 'dashboard' ? (
                   <>
                     <div className="flex-1 relative p-6 bg-zinc-100 dark:bg-slate-950">
@@ -273,9 +384,16 @@ const App: React.FC = () => {
                       />
                     </div>
                     <Sidebar 
-                      currentStage={ProjectStage.EXCAVATION} measurements={[]} layers={layers} layerMeta={{}} cameras={MOCK_CAMERAS} 
+                      currentStage={ProjectStage.EXCAVATION} measurements={[]} layers={layers} layerMeta={layerMeta} cameras={MOCK_CAMERAS} 
                       selectedCameraId={selectedCameraId} viewMode={viewMode} savedTours={INITIAL_TOUR_SESSIONS} onSetViewMode={setViewMode} 
-                      toggleLayer={(k) => setLayers(p => ({...p, [k]: !p[k]}))} onRunDroneSurvey={() => {}} onLayerUpload={() => {}} 
+                      toggleLayer={(k) => setLayers(p => ({...p, [k]: !p[k]}))} onRunDroneSurvey={() => {}} 
+                      onLayerUpload={(k, s) => {
+                        setLayerMeta(prev => ({
+                          ...prev,
+                          [k]: { ...prev[k], hasData: true, source: s, lastSynced: new Date().toISOString() }
+                        }));
+                        setLayers(p => ({ ...p, [k]: true }));
+                      }} 
                       onSelectCamera={setSelectedCameraId} onPlayTour={setPlaybackSession} onDeleteTour={() => {}} onOpenMultiView={() => setIsMultiCameraModalOpen(true)} onAddCamera={() => {}} 
                       bimFileName={uploadedBimName} onBimFileSelect={setUploadedBimName} isPremium={authState.isSubscribed}
                     />
@@ -290,6 +408,7 @@ const App: React.FC = () => {
             {isMultiCameraModalOpen && <MultiCameraModal cameras={MOCK_CAMERAS} onClose={() => setIsMultiCameraModalOpen(false)} onSelectCamera={setSelectedCameraId} onRenameCamera={() => {}} />}
             {playbackSession && <TourPlaybackModal session={playbackSession} onClose={() => setPlaybackSession(null)} />}
             {showBilling && <BillingModal onClose={() => setShowBilling(false)} onSuccess={handleUpgradeSuccess} />}
+            {showProjectCreation && <ProjectCreationModal onClose={() => setShowProjectCreation(false)} onCreate={handleCreateProject} />}
           </div>
         )}
       </div>
