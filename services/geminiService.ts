@@ -1,11 +1,10 @@
 
 import { GoogleGenAI, Type } from "@google/genai";
-import { ProjectStage, TaskLog, AiLogEntry } from "../types";
+import { ProjectStage } from "../types";
 
-// Safe initialization helper
+// Always use named parameter for apiKey and obtain it directly from process.env.API_KEY.
 const getAiClient = () => {
-  const apiKey = (typeof process !== 'undefined' && process.env.API_KEY) ? process.env.API_KEY : '';
-  return new GoogleGenAI({ apiKey });
+  return new GoogleGenAI({ apiKey: process.env.API_KEY as string });
 };
 
 /**
@@ -100,14 +99,14 @@ export const extractBoqFromPlans = async (planNames: string[]) => {
 export const analyzeSiteFrame = async (imageData: string, stage: ProjectStage, cameraName: string) => {
   try {
     const ai = getAiClient();
-    const prompt = `Analyze this construction image for project stage ${stage} at ${cameraName}.`;
+    const prompt = `Analyze this construction image for project stage ${stage} at ${cameraName}. Detect structural anomalies or safety hazards.`;
     
     const result = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
       contents: { 
         parts: [
           { text: prompt }, 
-          { inlineData: { mimeType: "image/jpeg", data: imageData.split(',')[1] } }
+          { inlineData: { mimeType: "image/jpeg", data: imageData.includes(',') ? imageData.split(',')[1] : imageData } }
         ] 
       },
       config: { responseMimeType: "application/json" }
@@ -123,9 +122,9 @@ export const getRegulatoryAdvice = async (query: string) => {
         const ai = getAiClient();
         const response = await ai.models.generateContent({
             model: 'gemini-3-flash-preview',
-            contents: [{ text: `Expert on Indian Construction Codes (IS Codes). Answer briefly: "${query}"` }],
+            contents: [{ text: `You are an expert on Indian Construction Codes (IS Codes). Provide a detailed but concise technical answer to: "${query}"` }],
         });
-        return response.text || "";
+        return response.text || "No regulatory guidance found for this query.";
     } catch (error) {
         return "Regulatory link offline. Please consult IS 456:2000 manually.";
     }
@@ -136,7 +135,7 @@ export const auditInventoryInvoice = async (invoiceText: string, stockSummary: s
     const ai = getAiClient();
     const result = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
-      contents: [{ text: `Audit invoice: ${invoiceText}. Stock: ${stockSummary}.` }],
+      contents: [{ text: `Audit construction material invoice against current stock. Invoice: ${invoiceText}. Stock: ${stockSummary}.` }],
       config: { responseMimeType: "application/json" }
     });
     return JSON.parse(result.text || '{}');

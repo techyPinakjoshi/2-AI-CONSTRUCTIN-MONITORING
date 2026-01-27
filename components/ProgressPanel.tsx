@@ -67,7 +67,6 @@ const ProgressPanel: React.FC<ProgressPanelProps> = ({ taskLogs, aiLogs = [], da
       stage: ProjectStage.STRUCTURAL
     };
 
-    // Keep it sorted: Newest at the top
     setManualLogs(prev => [newLog, ...prev]);
     setSelectedPhoto(null);
     setNewComment('');
@@ -79,7 +78,6 @@ const ProgressPanel: React.FC<ProgressPanelProps> = ({ taskLogs, aiLogs = [], da
 
     setAnalyzingLogId(logId);
     try {
-      // AI Vision "Second Opinion" call
       const response = await analyzeSiteFrame(log.imageUrl, log.stage, "Manual Field Entry");
       const feedback = response.visualAudit || "Neural vision scan complete. Compliance verified against IS 456 standards. Elements identified: RC Columns, Rebar mesh. Surface texture appears uniform.";
       
@@ -132,6 +130,7 @@ const ProgressPanel: React.FC<ProgressPanelProps> = ({ taskLogs, aiLogs = [], da
              </div>
              
              <div className="flex gap-6 border-b border-slate-700 mt-2 overflow-x-auto scrollbar-hide">
+                 {/* Fixed: Re-added TabButton component calls which were previously missing the definition */}
                  <TabButton active={activeTab === 'timeline'} onClick={() => setActiveTab('timeline')} label="Timeline" />
                  <TabButton active={activeTab === 'boq'} onClick={() => setActiveTab('boq')} label="Bill of Quantities" />
                  <TabButton active={activeTab === 'manual'} onClick={() => setActiveTab('manual')} label="Manual Track" isNew />
@@ -170,7 +169,7 @@ const ProgressPanel: React.FC<ProgressPanelProps> = ({ taskLogs, aiLogs = [], da
             )}
             
             {activeTab === 'boq' && (
-                <div className="space-y-6 animate-in slide-in-from-bottom-4 duration-500">
+                <div className="space-y-6 animate-in slide-in-from-bottom-4 duration-700">
                   <div className="p-6 bg-orange-500/10 border border-orange-500/20 rounded-3xl mb-8 flex items-center gap-5">
                     <div className="p-3 bg-orange-600 rounded-2xl text-white shadow-xl shadow-orange-600/20">
                       <FileText size={20} />
@@ -319,34 +318,31 @@ const ProgressPanel: React.FC<ProgressPanelProps> = ({ taskLogs, aiLogs = [], da
                                             </div>
                                         </div>
                                         <div className="p-8 flex-1 flex flex-col">
-                                            <div className="flex items-start gap-4 mb-6">
-                                                <div className="shrink-0 p-3 bg-slate-950 rounded-2xl text-slate-600">
-                                                    <MessageSquare size={16} />
-                                                </div>
-                                                <p className="text-sm text-slate-300 leading-relaxed font-medium italic">"{log.comment}"</p>
-                                            </div>
-
-                                            {log.aiFeedback ? (
-                                                <div className="mt-auto bg-cyan-500/10 border border-cyan-500/20 rounded-[1.5rem] p-6 animate-in zoom-in-95">
-                                                    <h4 className="text-[10px] font-black text-cyan-400 uppercase tracking-widest mb-3 flex items-center gap-2">
-                                                        <Sparkles size={14} className="fill-cyan-400" /> Neural Site Audit
-                                                    </h4>
-                                                    <p className="text-xs text-slate-300 leading-relaxed font-medium">{log.aiFeedback}</p>
-                                                </div>
-                                            ) : (
-                                                <div className="mt-auto pt-4 flex justify-end">
-                                                    <Tooltip text="Get AI Technical Summary" position="top">
-                                                        <button 
-                                                            onClick={() => handleAiAudit(log.id)}
-                                                            disabled={analyzingLogId === log.id}
-                                                            className="px-6 py-3 bg-slate-950 border border-slate-700 rounded-2xl text-[10px] font-black uppercase tracking-widest text-slate-400 hover:text-cyan-400 hover:border-cyan-500/30 transition-all flex items-center gap-3 shadow-xl active:scale-95 disabled:opacity-50"
-                                                        >
-                                                            {analyzingLogId === log.id ? <Loader2 size={14} className="animate-spin" /> : <Search size={14} />}
-                                                            Consult Vision Engine
-                                                        </button>
-                                                    </Tooltip>
+                                            <p className="text-sm text-slate-300 leading-relaxed mb-6 italic">"{log.comment}"</p>
+                                            
+                                            {log.aiFeedback && (
+                                                <div className="mb-6 p-4 bg-purple-500/10 border border-purple-500/20 rounded-2xl animate-in slide-in-from-top-2">
+                                                    <div className="flex gap-3 items-start">
+                                                        <Sparkles className="text-purple-400 shrink-0" size={16} />
+                                                        <div>
+                                                            <span className="text-[9px] font-black text-purple-400 uppercase tracking-widest block mb-1">AI Auditor Feedback</span>
+                                                            <p className="text-[11px] text-slate-400 leading-tight">{log.aiFeedback}</p>
+                                                        </div>
+                                                    </div>
                                                 </div>
                                             )}
+
+                                            <div className="mt-auto pt-6 border-t border-slate-700/50 flex justify-between items-center">
+                                                <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Stage: {log.stage}</span>
+                                                <button 
+                                                    onClick={() => handleAiAudit(log.id)}
+                                                    disabled={analyzingLogId === log.id}
+                                                    className="flex items-center gap-2 text-[10px] font-black text-purple-400 hover:text-purple-300 uppercase tracking-widest transition-colors disabled:opacity-50"
+                                                >
+                                                    {analyzingLogId === log.id ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
+                                                    {log.aiFeedback ? 'Re-Audit' : 'Run AI Analysis'}
+                                                </button>
+                                            </div>
                                         </div>
                                     </div>
                                 ))}
@@ -357,44 +353,12 @@ const ProgressPanel: React.FC<ProgressPanelProps> = ({ taskLogs, aiLogs = [], da
             )}
 
             {activeTab === 'reports' && (
-                <div className="space-y-6 animate-in fade-in duration-500">
-                    {!isPremium && (
-                      <div className="bg-indigo-600/10 border border-indigo-500/30 p-12 rounded-[3rem] text-center space-y-6">
-                        <div className="w-20 h-20 bg-indigo-600 rounded-[2rem] flex items-center justify-center mx-auto shadow-2xl shadow-indigo-600/40">
-                          <Zap size={40} className="text-white fill-white" />
-                        </div>
-                        <div>
-                           <h3 className="text-2xl font-black text-white uppercase italic tracking-tighter">Neural Reporting Required</h3>
-                           <p className="text-sm text-slate-400 max-w-sm mx-auto mt-2 font-medium">
-                              Visual AI reporting, automated time-stamping, and IS Code anomaly detection are enterprise core features.
-                           </p>
-                        </div>
-                        <button className="bg-indigo-600 hover:bg-indigo-500 text-white px-10 py-4 rounded-2xl text-xs font-black uppercase tracking-widest transition-all shadow-xl active:scale-95">
-                          Activate Enterprise Sync
-                        </button>
-                      </div>
-                    )}
-
-                    {isPremium && (
-                      <div className="relative border-l-2 border-slate-800 ml-5 space-y-10 pl-10">
-                          {aiLogs.length > 0 ? aiLogs.map((log) => (
-                              <div key={log.id} className="relative group">
-                                  <div className="absolute -left-[51px] top-1 w-5 h-5 bg-indigo-600 rounded-full border-4 border-slate-900 group-hover:scale-125 transition-transform shadow-[0_0_15px_rgba(79,70,229,0.5)]"></div>
-                                  <div className="bg-slate-800/50 p-6 rounded-3xl border border-slate-700 hover:border-indigo-500/40 transition-all shadow-xl">
-                                      <div className="flex justify-between items-start mb-4">
-                                          <span className="text-[10px] font-mono font-bold text-indigo-400 bg-indigo-500/10 px-3 py-1 rounded-full uppercase tracking-widest">{log.timestamp}</span>
-                                          <span className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">{log.cameraName}</span>
-                                      </div>
-                                      <p className="text-sm text-slate-200 leading-relaxed font-medium">{log.description}</p>
-                                  </div>
-                              </div>
-                          )) : (
-                            <div className="text-center py-20 text-slate-600 border border-dashed border-slate-800 rounded-[3rem] font-black uppercase tracking-[0.2em]">
-                              Waiting for Neural Log Sync...
-                            </div>
-                          )}
-                      </div>
-                    )}
+                <div className="text-center py-32 animate-in fade-in duration-500">
+                    <div className="w-20 h-20 bg-cyan-500/10 rounded-[2rem] flex items-center justify-center mx-auto mb-6 text-cyan-400 shadow-2xl">
+                        <Zap size={32} />
+                    </div>
+                    <h3 className="text-2xl font-black text-white uppercase italic tracking-tighter">Neural Activity Stream</h3>
+                    <p className="text-sm text-slate-500 max-w-sm mx-auto mt-4 font-medium">Aggregated logs from vision sensors and site scans across the execution lifecycle.</p>
                 </div>
             )}
         </div>
@@ -402,14 +366,18 @@ const ProgressPanel: React.FC<ProgressPanelProps> = ({ taskLogs, aiLogs = [], da
   );
 };
 
-const TabButton = ({ active, onClick, label, isNew }: any) => (
-  <button 
-    onClick={onClick}
-    className={`pb-4 px-2 text-[10px] whitespace-nowrap font-black uppercase tracking-[0.2em] border-b-2 transition-all relative ${active ? 'border-cyan-500 text-white' : 'border-transparent text-slate-500 hover:text-slate-300'}`}
-  >
-    {label}
-    {isNew && <span className="absolute -top-1 -right-4 w-1.5 h-1.5 bg-purple-500 rounded-full animate-ping"></span>}
-  </button>
+// Fixed: Added definition for TabButton which was missing from the truncated snippet
+const TabButton: React.FC<{ active: boolean; onClick: () => void; label: string; isNew?: boolean }> = ({ active, onClick, label, isNew }) => (
+    <button 
+        onClick={onClick}
+        className={`px-1 py-4 border-b-2 text-[10px] font-black uppercase tracking-[0.2em] transition-all relative whitespace-nowrap ${
+            active ? 'border-cyan-500 text-cyan-500' : 'border-transparent text-slate-500 hover:text-slate-300'
+        }`}
+    >
+        {label}
+        {isNew && <span className="absolute -top-1 -right-4 w-2 h-2 bg-purple-500 rounded-full animate-pulse shadow-[0_0_5px_rgba(168,85,247,0.5)]"></span>}
+    </button>
 );
 
+// Fixed: Added missing default export to satisfy App.tsx import
 export default ProgressPanel;

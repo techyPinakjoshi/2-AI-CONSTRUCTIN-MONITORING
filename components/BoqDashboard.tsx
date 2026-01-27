@@ -1,243 +1,512 @@
 
-import React, { useState, useContext, useRef } from 'react';
+import React, { useState, useContext, useRef, ChangeEvent } from 'react';
 import { 
   Calculator, X, Sun, Moon, FileUp, FileText, BarChart3, 
   UploadCloud, Plus, Loader2, Sparkles, Download, ArrowRight,
-  LayoutDashboard, IndianRupee, ShieldCheck
+  LayoutDashboard, IndianRupee, ShieldCheck, Folder, HardDrive, 
+  Search, Filter, ChevronRight, File, MoreVertical, CheckCircle2,
+  Clock, AlertCircle, Briefcase, TrendingUp, Users, DollarSign,
+  Grid, List, Layers, Shield, FileSpreadsheet, UserCheck, ShieldAlert,
+  UserPlus, UserMinus, Key, Settings, MessageSquare, ClipboardCheck, Trello
 } from 'lucide-react';
 import { ThemeContext } from '../App';
 import { extractBoqFromPlans } from '../services/geminiService';
+import { MOCK_DOCUMENTS, MOCK_FOLDERS, MOCK_RFIS, MOCK_VENDORS, MOCK_CONTRACTS, MOCK_SUBMITTALS } from '../constants';
 import Tooltip from './Tooltip';
+import { UserRole, ProjectDocument, WorkflowType } from '../types';
 
-interface BoqItem {
+type DashboardTab = 'overview' | 'cde' | 'workflows' | 'procurement' | 'financials' | 'approvals' | 'team' | 'boq';
+type WorkflowView = 'board' | 'list';
+
+interface TeamMember {
   id: string;
-  code: string;
-  description: string;
-  qty: number;
-  unit: string;
-  rate: number;
-  amount: number;
-  category: string;
+  name: string;
+  email: string;
+  role: UserRole;
+  status: 'ACTIVE' | 'INVITED';
+  joinedDate: string;
 }
 
-interface FileUploadProgress {
-  file: File;
-  progress: number;
-  status: 'uploading' | 'completed' | 'error';
-}
-
-const BoqDashboard: React.FC<any> = ({ onClose, onUpgrade }) => {
+const ProjectSuite: React.FC<any> = ({ onClose, onUpgrade }) => {
   const { isDark, toggleTheme } = useContext(ThemeContext);
-  const [activeTab, setActiveTab] = useState<'overview' | 'sor' | 'upload'>('upload');
-  const [uploadQueue, setUploadQueue] = useState<FileUploadProgress[]>([]);
-  const [extractedBoq, setExtractedBoq] = useState<BoqItem[]>([]);
-  const [isExtracting, setIsExtracting] = useState(false);
-  const [showProgressLink, setShowProgressLink] = useState(false);
+  const [activeTab, setActiveTab] = useState<DashboardTab>('overview'); 
+  const [activeWorkflowType, setActiveWorkflowType] = useState<WorkflowType>('RFI');
+  const [workflowView, setWorkflowView] = useState<WorkflowView>('board');
+  const [userRole, setUserRole] = useState<UserRole>('CHECKER'); 
+  
+  // File Upload Logic
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isUploading, setIsUploading] = useState(false);
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files) {
-      const newFiles = Array.from(e.target.files);
-      const newUploads = newFiles.map(file => ({
-        file,
-        progress: 0,
-        status: 'uploading' as const
-      }));
+  // Document State
+  const [docs, setDocs] = useState<ProjectDocument[]>(MOCK_DOCUMENTS.map(d => ({
+    ...d,
+    approvalStatus: (d.id === 'd1' ? 'PENDING_REVIEW' : 'APPROVED') as any,
+    checker: d.id === 'd1' ? 'Lead Manager' : 'Site Lead'
+  })));
 
-      setUploadQueue(prev => [...prev, ...newUploads]);
+  // Team State
+  const [team, setTeam] = useState<TeamMember[]>([
+    { id: 'u1', name: 'Arjun Sharma', email: 'arjun.s@lnt.com', role: 'CHECKER', status: 'ACTIVE', joinedDate: '2023-10-01' },
+    { id: 'u2', name: 'Rajesh K.', email: 'rajesh.k@contractor.in', role: 'MAKER', status: 'ACTIVE', joinedDate: '2023-11-15' },
+    { id: 'u3', name: 'Sita Verma', email: 'sita.v@arch.com', role: 'VIEWER', status: 'ACTIVE', joinedDate: '2023-11-20' },
+  ]);
+  
+  const [inviteEmail, setInviteEmail] = useState('');
+  const [inviteRole, setInviteRole] = useState<UserRole>('MAKER');
 
-      newUploads.forEach((upload) => {
-        let currentProgress = 0;
-        const interval = setInterval(() => {
-          currentProgress += Math.floor(Math.random() * 20) + 10;
-          if (currentProgress >= 100) {
-            currentProgress = 100;
-            clearInterval(interval);
-            setUploadQueue(current => 
-              current.map(item => 
-                item.file === upload.file ? { ...item, progress: 100, status: 'completed' } : item
-              )
-            );
-          } else {
-            setUploadQueue(current => 
-              current.map(item => 
-                item.file === upload.file ? { ...item, progress: currentProgress } : item
-              )
-            );
-          }
-        }, 200);
-      });
-    }
+  const totalBudget = MOCK_CONTRACTS.reduce((acc, c) => acc + c.value, 0);
+
+  const handleApprove = (id: string) => {
+    setDocs(prev => prev.map(d => {
+      if (d.id === id) {
+        return { 
+          ...d, 
+          approvalStatus: 'APPROVED', 
+          status: 'S2', 
+          checker: 'Project Manager (Verified)' 
+        };
+      }
+      return d;
+    }));
   };
 
-  const handleExtractBoq = async () => {
-    const readyFiles = uploadQueue.filter(u => u.status === 'completed');
-    if (readyFiles.length === 0) return;
-    
-    setIsExtracting(true);
-    try {
-      const names = readyFiles.map(f => f.file.name);
-      const data = await extractBoqFromPlans(names);
-      setExtractedBoq(data);
-      setActiveTab('sor');
-      setShowProgressLink(true);
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setIsExtracting(false);
-    }
+  const triggerUpload = () => fileInputRef.current?.click();
+
+  const handleFileUpload = (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setIsUploading(true);
+    setTimeout(() => {
+      const extension = file.name.split('.').pop()?.toUpperCase() || 'FILE';
+      const newDoc: ProjectDocument = {
+        id: `DOC-${Date.now()}`,
+        name: file.name.replace(`.${extension.toLowerCase()}`, ''),
+        extension: extension,
+        size: `${(file.size / (1024 * 1024)).toFixed(2)} MB`,
+        version: 1,
+        status: 'S0',
+        approvalStatus: 'PENDING_REVIEW',
+        author: 'Current User (Maker)',
+        lastModified: new Date().toISOString().split('T')[0],
+        folderId: 'f1',
+        tags: ['New Upload']
+      };
+      setDocs(prev => [newDoc, ...prev]);
+      setIsUploading(false);
+      setActiveTab('cde');
+    }, 1500);
   };
 
-  const exportCSV = () => {
-    if (extractedBoq.length === 0) {
-        alert("No BOQ data to export. Please generate a BOQ first.");
-        return;
-    }
-    
-    // Construct CSV String
-    const headers = "SOR Code,Description,Category,Quantity,Unit,Rate (INR),Amount (INR)\n";
-    const rows = extractedBoq.map(item => 
-      `"${item.code}","${item.description.replace(/"/g, '""')}","${item.category}",${item.qty},"${item.unit}",${item.rate},${item.amount}`
-    ).join("\n");
-    
-    const csvContent = headers + rows;
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    
-    const link = document.createElement("a");
-    link.setAttribute("href", url);
-    link.setAttribute("download", `ConstructAI_BOQ_${new Date().getTime()}.csv`);
-    link.style.visibility = 'hidden';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url); // Clean up
+  const handleAddTeamMember = () => {
+    if (!inviteEmail.trim()) return;
+    const newMember: TeamMember = {
+      id: `u-${Date.now()}`,
+      name: inviteEmail.split('@')[0],
+      email: inviteEmail,
+      role: inviteRole,
+      status: 'INVITED',
+      joinedDate: new Date().toISOString().split('T')[0]
+    };
+    setTeam(prev => [...prev, newMember]);
+    setInviteEmail('');
   };
-
-  const totalAmount = extractedBoq.reduce((acc, curr) => acc + curr.amount, 0);
 
   return (
     <div className="fixed inset-0 z-[100] bg-zinc-50 dark:bg-slate-950 flex flex-col font-sans animate-in fade-in duration-500 overflow-hidden">
-      <header className="h-20 bg-white dark:bg-slate-900 border-b border-zinc-200 dark:border-white/5 flex items-center justify-between px-8 shrink-0">
+      
+      <input type="file" ref={fileInputRef} className="hidden" onChange={handleFileUpload} />
+
+      {/* Universal Header */}
+      <header className="h-20 bg-white dark:bg-slate-900 border-b border-zinc-200 dark:border-white/5 flex items-center justify-between px-8 shrink-0 shadow-sm">
         <div className="flex items-center gap-6">
-          <div className="p-3 bg-gradient-to-tr from-orange-500 to-red-600 rounded-2xl shadow-xl">
-            <Calculator className="text-white" size={24} />
+          <div className="p-3 bg-slate-900 dark:bg-white rounded-2xl shadow-xl">
+            <Shield className="text-white dark:text-slate-900" size={24} />
           </div>
           <div>
-            <h1 className="text-xl font-black text-slate-900 dark:text-white tracking-tight uppercase italic leading-none">AI PM <span className="text-orange-500">Suite</span></h1>
-            <p className="text-[10px] text-slate-400 font-mono tracking-widest uppercase mt-1">Plan Synthesis Engine</p>
+            <h1 className="text-xl font-black text-slate-900 dark:text-white tracking-tight uppercase italic leading-none">
+              Project <span className="text-cyan-500">Suite</span>
+            </h1>
+            <p className="text-[10px] text-slate-400 font-mono tracking-widest uppercase mt-1">Unified CDE & Operations</p>
           </div>
         </div>
 
         <div className="flex items-center gap-4">
+          <div className="hidden md:flex items-center gap-4 px-4 py-2 bg-emerald-500/10 border border-emerald-500/20 rounded-xl mr-4">
+             <div className="flex items-center gap-2">
+               <UserCheck size={14} className="text-emerald-600 dark:text-emerald-400" />
+               <span className="text-[10px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-widest">{userRole} ACCESS</span>
+             </div>
+             <div className="w-px h-4 bg-emerald-500/20 mx-2"></div>
+             <span className="text-[10px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-widest">ISO 19650 ACTIVE</span>
+          </div>
           <Tooltip text="Switch Theme">
             <button onClick={toggleTheme} className="p-3 bg-zinc-100 dark:bg-slate-800 rounded-2xl transition-all">
               {isDark ? <Sun size={20} className="text-amber-400" /> : <Moon size={20} className="text-indigo-600" />}
             </button>
           </Tooltip>
-          <button onClick={onClose} className="p-3 text-slate-400 hover:text-red-500 transition-colors"><X size={24} /></button>
+          <button onClick={onClose} className="p-3 text-slate-400 hover:text-red-500 transition-colors">
+            <X size={24} />
+          </button>
         </div>
       </header>
 
       <div className="flex-1 flex overflow-hidden">
-        <aside className="w-80 bg-white dark:bg-slate-900/40 border-r border-zinc-200 dark:border-white/5 p-6 flex flex-col overflow-y-auto shrink-0">
-          <nav className="space-y-2 mb-8">
-            <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Operations</h3>
-            <SidebarBtn active={activeTab === 'upload'} onClick={() => setActiveTab('upload')} icon={<FileUp size={16}/>} label="Plan Ingestion" />
-            <SidebarBtn active={activeTab === 'sor'} onClick={() => setActiveTab('sor')} icon={<FileText size={16}/>} label="BOQ Item Table" />
-            <SidebarBtn active={activeTab === 'overview'} onClick={() => setActiveTab('overview')} icon={<BarChart3 size={16}/>} label="Cost Summary" />
-          </nav>
-          
-          <div className="mt-auto p-5 bg-orange-500/10 border border-orange-500/20 rounded-3xl">
-            <p className="text-[10px] font-black text-orange-600 dark:text-orange-400 uppercase tracking-widest mb-2">Pro Tip</p>
-            <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">Upload at least 2 versions of plans for AI verification cross-checks.</p>
+        {/* Navigation Sidebar */}
+        <aside className="w-64 bg-white dark:bg-slate-900 border-r border-zinc-200 dark:border-white/5 flex flex-col shrink-0">
+          <div className="p-6 flex-1 overflow-y-auto space-y-8">
+            <section>
+              <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 px-1">Coordination</h3>
+              <nav className="space-y-1">
+                <NavBtn active={activeTab === 'overview'} onClick={() => setActiveTab('overview')} icon={<TrendingUp size={16}/>} label="Executive Overview" />
+                <NavBtn active={activeTab === 'workflows'} onClick={() => setActiveTab('workflows')} icon={<Clock size={16}/>} label="Workflow Engine" />
+                <NavBtn active={activeTab === 'cde'} onClick={() => setActiveTab('cde')} icon={<HardDrive size={16}/>} label="CDE / Documents" />
+                <NavBtn active={activeTab === 'approvals'} onClick={() => setActiveTab('approvals')} icon={<ShieldAlert size={16}/>} label="Approval Center" />
+              </nav>
+            </section>
+
+            <section>
+              <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 px-1">Site & Admin</h3>
+              <nav className="space-y-1">
+                <NavBtn active={activeTab === 'boq'} onClick={() => setActiveTab('boq')} icon={<Calculator size={16}/>} label="BOQ Ledger" />
+                <NavBtn active={activeTab === 'financials'} onClick={() => setActiveTab('financials')} icon={<DollarSign size={16}/>} label="Contract Ledger" />
+                <NavBtn active={activeTab === 'team'} onClick={() => setActiveTab('team')} icon={<Users size={16}/>} label="Team & Access" />
+              </nav>
+            </section>
+          </div>
+
+          <div className="p-6 border-t border-zinc-100 dark:border-white/5">
+            <button onClick={onUpgrade} className="w-full group bg-slate-900 dark:bg-white p-4 rounded-2xl text-white dark:text-slate-900 flex items-center justify-between shadow-xl transition-all hover:scale-[1.02] active:scale-95">
+               <span className="text-[10px] font-black uppercase tracking-widest">Enterprise Sync</span>
+               <ArrowRight size={16} className="group-hover:translate-x-1 transition-transform" />
+            </button>
           </div>
         </aside>
 
-        <main className="flex-1 overflow-y-auto p-12 bg-white dark:bg-slate-950 relative">
-          <div className="max-w-5xl mx-auto">
-            {activeTab === 'upload' && (
-              <div className="flex flex-col items-center justify-center min-h-[50vh] animate-in fade-in zoom-in duration-500 text-center">
-                <div className="w-24 h-24 bg-orange-500/10 text-orange-600 rounded-[2.5rem] flex items-center justify-center mb-8 shadow-2xl">
-                  <UploadCloud size={48} />
-                </div>
-                <h2 className="text-4xl font-black text-slate-900 dark:text-white uppercase italic tracking-tighter mb-4">Ingest Plans</h2>
-                <p className="text-slate-500 max-w-md mx-auto mb-10 text-sm leading-relaxed font-medium">Stage your architectural and structural drawings for automated quantity extraction following IS 1200.</p>
-
-                <div className="w-full max-w-xl bg-zinc-50 dark:bg-slate-900 p-10 rounded-[3rem] border border-zinc-200 dark:border-white/5 shadow-2xl">
-                  <input type="file" multiple ref={fileInputRef} onChange={handleFileUpload} className="hidden" accept=".pdf,.dwg,.jpg,.png" />
-                  <button 
-                    onClick={() => fileInputRef.current?.click()}
-                    className="w-full py-16 border-4 border-dashed border-zinc-200 dark:border-white/5 rounded-[2rem] hover:bg-zinc-100 dark:hover:bg-white/5 transition-all mb-8 group"
-                  >
-                    <Plus className="mx-auto text-slate-300 group-hover:text-orange-500 mb-4 transition-colors" size={56} />
-                    <span className="text-xs font-black text-slate-400 uppercase tracking-[0.2em]">Drop Plans Here</span>
-                  </button>
-
-                  <button 
-                    onClick={handleExtractBoq}
-                    disabled={isExtracting || uploadQueue.length === 0}
-                    className="w-full bg-orange-600 hover:bg-orange-500 text-white py-5 rounded-2xl font-black uppercase tracking-widest shadow-xl shadow-orange-600/20 flex items-center justify-center gap-3 transition-all active:scale-95 disabled:opacity-50"
-                  >
-                    {isExtracting ? <Loader2 className="animate-spin" size={20} /> : <Sparkles size={20} />}
-                    {isExtracting ? "Synthesizing BOQ..." : "Generate AI BOQ"}
-                  </button>
+        {/* Main Content Area */}
+        <main className="flex-1 overflow-y-auto bg-zinc-50 dark:bg-slate-950 p-8">
+          <div className="max-w-7xl mx-auto space-y-8 pb-20">
+            
+            {activeTab === 'overview' && (
+              <div className="animate-in fade-in duration-500">
+                <h2 className="text-3xl font-black text-slate-900 dark:text-white uppercase italic tracking-tighter mb-8">Executive Project Command</h2>
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                  <StatCard label="Total Committed" value={`₹${(totalBudget/10000000).toFixed(1)}Cr`} sub="Active Portfolio" icon={<IndianRupee className="text-emerald-500"/>} />
+                  <StatCard label="CDE Recordset" value={docs.length} sub="ISO 19650 Vaulted" icon={<HardDrive className="text-blue-500"/>} />
+                  <StatCard label="Critical RFIs" value={MOCK_RFIS.filter(r => r.status === 'OPEN').length} sub="Pending Action" icon={<AlertCircle className="text-orange-500"/>} />
+                  <StatCard label="Compliance" value="98.2%" sub="Global Safety Score" icon={<ShieldCheck className="text-purple-500"/>} />
                 </div>
               </div>
             )}
 
-            {activeTab === 'sor' && (
-              <div className="animate-in slide-in-from-bottom-4 duration-700">
-                <div className="flex justify-between items-end mb-10">
+            {activeTab === 'boq' && (
+               <div className="animate-in fade-in slide-in-from-right-4 duration-500 space-y-8">
+                  <div className="flex justify-between items-end">
                     <div>
-                        <h2 className="text-3xl font-black text-slate-900 dark:text-white uppercase italic tracking-tighter">Bill of Quantities</h2>
-                        <p className="text-slate-500 text-xs font-bold uppercase tracking-widest mt-1">Verified against Indian Standard Code IS 1200</p>
+                        <h2 className="text-3xl font-black text-slate-900 dark:text-white uppercase italic tracking-tighter">BOQ Ledger</h2>
+                        <p className="text-slate-500 text-[10px] font-black uppercase tracking-widest mt-1">Synced Quantities & AI Material Audit</p>
                     </div>
-                    <div className="flex gap-4">
-                        <button 
-                            onClick={exportCSV}
-                            className="flex items-center gap-2 bg-white dark:bg-slate-800 border border-zinc-200 dark:border-white/10 px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-xl hover:bg-zinc-50 transition-all active:scale-95"
-                        >
-                            <Download size={14}/> Download CSV
-                        </button>
-                    </div>
+                    <button className="flex items-center gap-2 bg-blue-600 text-white px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-xl shadow-blue-600/20 active:scale-95 transition-all">
+                       <Plus size={14}/> Import BOQ Report
+                    </button>
+                  </div>
+                  
+                  <div className="bg-white dark:bg-slate-900 border border-zinc-200 dark:border-white/5 rounded-[3rem] p-12 text-center">
+                     <div className="w-20 h-20 bg-amber-500/10 rounded-3xl flex items-center justify-center text-amber-500 mx-auto mb-6">
+                        <FileSpreadsheet size={32} />
+                     </div>
+                     <h3 className="text-xl font-black text-slate-900 dark:text-white uppercase italic mb-2">Quantities Repository</h3>
+                     <p className="text-slate-500 text-xs font-medium max-w-sm mx-auto leading-relaxed italic">Once you extract quantities using the 2D to BOQ tool, they will be archived here for version control and financial reconciliation.</p>
+                  </div>
+               </div>
+            )}
+
+            {activeTab === 'workflows' && (
+              <div className="animate-in slide-in-from-left-4 duration-500 space-y-8 h-full flex flex-col">
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6">
+                   <div className="space-y-1">
+                      <h2 className="text-3xl font-black text-slate-900 dark:text-white uppercase italic tracking-tighter leading-none">Workflow Command</h2>
+                      <p className="text-slate-500 text-[10px] font-black uppercase tracking-widest">Collaborative Coordination Engine • SLA Tracking Active</p>
+                   </div>
+                   <div className="flex items-center gap-3 bg-white dark:bg-slate-900 p-1.5 rounded-2xl border border-zinc-200 dark:border-white/10 shadow-sm">
+                      <WorkflowTab active={activeWorkflowType === 'RFI'} onClick={() => setActiveWorkflowType('RFI')} icon={<MessageSquare size={14}/>} label="RFIs" count={MOCK_RFIS.length} />
+                      <WorkflowTab active={activeWorkflowType === 'SUBMITTAL'} onClick={() => setActiveWorkflowType('SUBMITTAL')} icon={<FileUp size={14}/>} label="Submittals" count={MOCK_SUBMITTALS.length} />
+                      <WorkflowTab active={activeWorkflowType === 'INSPECTION'} onClick={() => setActiveWorkflowType('INSPECTION')} icon={<ClipboardCheck size={14}/>} label="Inspections" count={0} />
+                   </div>
+                   <div className="flex gap-2">
+                      <div className="flex bg-zinc-100 dark:bg-slate-800 rounded-xl p-1 border border-zinc-200 dark:border-white/5 mr-2">
+                        <button onClick={() => setWorkflowView('board')} className={`p-2 rounded-lg transition-all ${workflowView === 'board' ? 'bg-white dark:bg-slate-700 text-cyan-500 shadow-sm' : 'text-slate-400'}`}><Trello size={14}/></button>
+                        <button onClick={() => setWorkflowView('list')} className={`p-2 rounded-lg transition-all ${workflowView === 'list' ? 'bg-white dark:bg-slate-700 text-cyan-500 shadow-sm' : 'text-slate-400'}`}><List size={14}/></button>
+                      </div>
+                      <button className="flex items-center gap-2 bg-blue-600 text-white px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-xl shadow-blue-600/20 active:scale-95 transition-all">
+                         <Plus size={14}/> Create New {activeWorkflowType}
+                      </button>
+                   </div>
                 </div>
 
-                <div className="bg-white dark:bg-slate-900 border border-zinc-200 dark:border-white/5 rounded-[3rem] overflow-hidden shadow-2xl">
-                  <table className="w-full text-left">
-                    <thead className="bg-zinc-50 dark:bg-slate-800/20 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-zinc-200 dark:border-white/5">
-                      <tr>
-                        <th className="px-10 py-6">Code</th>
-                        <th className="px-10 py-6">Description</th>
-                        <th className="px-10 py-6 text-right">Quantity</th>
-                        <th className="px-10 py-6 text-right">Amount (₹)</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-zinc-100 dark:divide-white/5">
-                      {extractedBoq.map(item => (
-                        <tr key={item.id} className="hover:bg-orange-500/5 transition-colors">
-                          <td className="px-10 py-6 font-mono font-bold text-orange-600 dark:text-orange-400">{item.code}</td>
-                          <td className="px-10 py-6">
-                            <div className="text-sm font-bold text-slate-800 dark:text-slate-200 leading-snug">{item.description}</div>
-                            <div className="text-[10px] text-slate-400 uppercase font-black tracking-widest mt-1">{item.category}</div>
-                          </td>
-                          <td className="px-10 py-6 text-right font-mono text-slate-600 dark:text-slate-400">
-                             {item.qty} <span className="text-[10px] uppercase">{item.unit}</span>
-                          </td>
-                          <td className="px-10 py-6 text-right font-mono font-black text-slate-900 dark:text-white">
-                             {item.amount.toLocaleString('en-IN')}
-                          </td>
-                        </tr>
+                {workflowView === 'board' ? (
+                   <div className="grid grid-cols-1 md:grid-cols-3 gap-8 min-h-[500px]">
+                      {['OPEN', 'UNDER_REVIEW', 'CLOSED'].map(status => (
+                         <div key={status} className="bg-zinc-100/50 dark:bg-slate-900/50 border border-zinc-200 dark:border-white/5 rounded-[2.5rem] p-6 flex flex-col shadow-inner">
+                            <div className="flex justify-between items-center mb-6 px-2">
+                              <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{status.replace('_', ' ')}</h4>
+                              <span className="w-6 h-6 rounded-full bg-white dark:bg-slate-800 flex items-center justify-center text-[10px] font-black text-slate-400 border border-zinc-200 dark:border-white/5 shadow-sm">
+                                {activeWorkflowType === 'RFI' ? MOCK_RFIS.filter(r => r.status === (status === 'UNDER_REVIEW' ? 'PENDING_APPROVAL' : status)).length : MOCK_SUBMITTALS.filter(s => s.status === status).length}
+                              </span>
+                            </div>
+                            
+                            <div className="space-y-4 overflow-y-auto pr-1 scrollbar-hide flex-1">
+                               {activeWorkflowType === 'RFI' ? (
+                                 MOCK_RFIS.filter(r => r.status === (status === 'UNDER_REVIEW' ? 'PENDING_APPROVAL' : status)).map(rfi => (
+                                    <WorkflowCard key={rfi.id} title={rfi.title} id={rfi.id} priority={rfi.priority} assignee={rfi.assignedTo} dueDate={rfi.dueDate} />
+                                 ))
+                               ) : (
+                                 MOCK_SUBMITTALS.filter(s => s.status === status).map(sub => (
+                                    <WorkflowCard key={sub.id} title={sub.title} id={sub.id} priority={sub.priority} assignee={sub.assignedTo} dueDate={sub.dueDate} meta={sub.specSection} />
+                                 ))
+                               )}
+
+                               {((activeWorkflowType === 'RFI' && MOCK_RFIS.filter(r => r.status === (status === 'UNDER_REVIEW' ? 'PENDING_APPROVAL' : status)).length === 0) || 
+                                 (activeWorkflowType === 'SUBMITTAL' && MOCK_SUBMITTALS.filter(s => s.status === status).length === 0)) && (
+                                 <div className="py-20 flex flex-col items-center justify-center opacity-10 italic">
+                                    <CheckCircle2 size={32} />
+                                    <span className="text-[9px] font-black uppercase mt-2">No Items</span>
+                                 </div>
+                               )}
+                            </div>
+                         </div>
                       ))}
-                    </tbody>
-                  </table>
-                  <div className="p-10 bg-zinc-50 dark:bg-slate-800/10 flex justify-between items-center border-t border-zinc-100 dark:border-white/5">
-                    <span className="text-sm font-black text-slate-500 uppercase tracking-widest">Total Estimated Budget</span>
-                    <span className="text-4xl font-black text-orange-600 dark:text-orange-400">₹{totalAmount.toLocaleString('en-IN')}</span>
+                   </div>
+                ) : (
+                  <div className="bg-white dark:bg-slate-900 border border-zinc-200 dark:border-white/5 rounded-[2.5rem] overflow-hidden shadow-xl">
+                      <table className="w-full text-left">
+                         <thead className="bg-zinc-50 dark:bg-slate-950 text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                            <tr>
+                               <th className="px-8 py-5">Reference & Title</th>
+                               <th className="px-8 py-5">Status</th>
+                               <th className="px-8 py-5">Assignee</th>
+                               <th className="px-8 py-5">SLA Due Date</th>
+                               <th className="px-8 py-5 text-right">Action</th>
+                            </tr>
+                         </thead>
+                         <tbody className="divide-y divide-zinc-100 dark:divide-white/5">
+                            {(activeWorkflowType === 'RFI' ? MOCK_RFIS : MOCK_SUBMITTALS).map((item: any) => (
+                               <tr key={item.id} className="hover:bg-zinc-50 dark:hover:bg-white/5 transition-colors cursor-pointer group">
+                                  <td className="px-8 py-5">
+                                     <div className="flex items-center gap-4">
+                                        <div className="w-10 h-10 bg-slate-100 dark:bg-white/5 rounded-xl flex items-center justify-center text-slate-400 group-hover:bg-blue-600 group-hover:text-white transition-all shadow-sm"><FileText size={18}/></div>
+                                        <div>
+                                           <div className="text-xs font-black text-slate-900 dark:text-white uppercase tracking-tight">{item.id}</div>
+                                           <div className="text-[10px] text-slate-500 font-bold mt-0.5 truncate max-w-[300px]">{item.title}</div>
+                                        </div>
+                                     </div>
+                                  </td>
+                                  <td className="px-8 py-5">
+                                     <span className="px-3 py-1 bg-blue-500/10 border border-blue-500/20 text-[9px] font-black text-blue-600 uppercase tracking-widest rounded-full">{item.status.replace('_', ' ')}</span>
+                                  </td>
+                                  <td className="px-8 py-5 text-xs font-bold text-slate-600 dark:text-slate-400 uppercase">{item.assignedTo}</td>
+                                  <td className="px-8 py-5 text-xs font-mono text-slate-500">{item.dueDate}</td>
+                                  <td className="px-8 py-5 text-right">
+                                     <button className="p-2 text-slate-400 hover:text-blue-600 transition-colors"><ChevronRight size={18}/></button>
+                                  </td>
+                               </tr>
+                            ))}
+                         </tbody>
+                      </table>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {activeTab === 'cde' && (
+              <div className="animate-in slide-in-from-right-4 duration-500 flex flex-col h-[calc(100vh-14rem)] bg-white dark:bg-slate-900 border border-zinc-200 dark:border-white/5 rounded-[3rem] overflow-hidden shadow-2xl">
+                <div className="p-6 border-b border-zinc-100 dark:border-white/5 flex items-center justify-between bg-zinc-50/50 dark:bg-white/5">
+                  <div className="flex items-center gap-4">
+                    <div className="bg-blue-600 p-3 rounded-2xl text-white shadow-lg shadow-blue-600/20"><HardDrive size={20}/></div>
+                    <div>
+                      <h3 className="text-lg font-black text-slate-900 dark:text-white uppercase italic tracking-tighter leading-none">Common Data Environment</h3>
+                      <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1">ISO 19650 Project Vault</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <button onClick={triggerUpload} disabled={isUploading} className="flex items-center gap-2 bg-blue-600 text-white px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest shadow-xl shadow-blue-600/20 active:scale-95 transition-all disabled:opacity-50">
+                      {isUploading ? <Loader2 size={16} className="animate-spin" /> : <UploadCloud size={16}/>} 
+                      {isUploading ? 'Syncing...' : 'Upload Asset'}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="flex flex-1 overflow-hidden">
+                  <aside className="w-72 border-r border-zinc-100 dark:border-white/5 p-6 overflow-y-auto space-y-6">
+                    <section>
+                      <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 px-2 italic">Standard Folders</h4>
+                      <div className="space-y-1">
+                        {MOCK_FOLDERS.map(f => (
+                          <div key={f.id} className="flex items-center gap-3 p-3 rounded-xl hover:bg-blue-500/10 hover:text-blue-600 dark:hover:text-blue-400 cursor-pointer text-slate-600 dark:text-slate-400 transition-all group">
+                            <Folder size={16} className="text-slate-400 group-hover:text-blue-500 transition-colors" />
+                            <span className="text-xs font-black uppercase tracking-tight">{f.name}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </section>
+                  </aside>
+
+                  <div className="flex-1 overflow-y-auto">
+                    <table className="w-full text-left">
+                      <thead className="bg-zinc-50 dark:bg-slate-950 text-[10px] font-black text-slate-400 uppercase tracking-widest sticky top-0 z-10">
+                        <tr>
+                          <th className="px-8 py-5">Metadata</th>
+                          <th className="px-8 py-5">ISO Status</th>
+                          <th className="px-8 py-5">Approval</th>
+                          <th className="px-8 py-5">Modified</th>
+                          <th className="px-8 py-5 text-right">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-zinc-100 dark:divide-white/5">
+                        {docs.map(doc => (
+                          <tr key={doc.id} className="hover:bg-blue-600/5 transition-colors group cursor-pointer">
+                            <td className="px-8 py-5">
+                              <div className="flex items-center gap-4">
+                                <div className="w-10 h-10 bg-slate-100 dark:bg-white/5 rounded-xl flex items-center justify-center text-slate-400 group-hover:bg-blue-600 group-hover:text-white transition-all shadow-sm">
+                                  {doc.extension === 'PDF' ? <FileText size={18}/> : <File size={18}/>}
+                                </div>
+                                <div>
+                                  <div className="text-xs font-black text-slate-900 dark:text-white leading-none mb-1 uppercase tracking-tight">{doc.name}.{doc.extension}</div>
+                                  <div className="text-[9px] text-slate-400 uppercase font-bold tracking-widest">Maker: {doc.author} • {doc.size}</div>
+                                </div>
+                              </div>
+                            </td>
+                            <td className="px-8 py-5">
+                               <span className="px-3 py-1 bg-blue-500/10 border border-blue-500/20 text-[9px] font-black text-blue-600 uppercase tracking-widest w-fit shadow-sm rounded-full">
+                                 {doc.status}
+                               </span>
+                            </td>
+                            <td className="px-8 py-5">
+                               <div className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest w-fit shadow-sm border ${
+                                 doc.approvalStatus === 'APPROVED' ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-500' :
+                                 doc.approvalStatus === 'PENDING_REVIEW' ? 'bg-amber-500/10 border-amber-500/20 text-amber-500' :
+                                 'bg-slate-500/10 border-slate-500/20 text-slate-500'
+                               }`}>
+                                 {doc.approvalStatus.replace('_', ' ')}
+                               </div>
+                            </td>
+                            <td className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest">{doc.lastModified}</td>
+                            <td className="px-8 py-5 text-right">
+                               <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-all">
+                                  {doc.approvalStatus === 'PENDING_REVIEW' && userRole === 'CHECKER' && (
+                                    <button onClick={(e) => { e.stopPropagation(); handleApprove(doc.id); }} className="p-2 text-emerald-500 hover:bg-emerald-500/10 rounded-lg"><CheckCircle2 size={16}/></button>
+                                  )}
+                                  <button className="p-2 text-slate-400 hover:text-blue-600"><Download size={16}/></button>
+                                  <button className="p-2 text-slate-400 hover:text-slate-900 dark:hover:text-white"><MoreVertical size={16}/></button>
+                               </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
                   </div>
                 </div>
               </div>
             )}
+
+            {activeTab === 'approvals' && (
+              <div className="animate-in slide-in-from-left-4 duration-500 space-y-8">
+                 <div className="flex justify-between items-end">
+                    <div>
+                        <h2 className="text-3xl font-black text-slate-900 dark:text-white uppercase italic tracking-tighter leading-none mb-2">Approval Center</h2>
+                        <p className="text-slate-500 text-[10px] font-black uppercase tracking-widest">ISO 19650 Compliance Workflows (Checker Module)</p>
+                    </div>
+                 </div>
+                 <div className="grid grid-cols-1 gap-4">
+                    {docs.filter(d => d.approvalStatus === 'PENDING_REVIEW').length > 0 ? (
+                      docs.filter(d => d.approvalStatus === 'PENDING_REVIEW').map(doc => (
+                        <div key={doc.id} className="bg-white dark:bg-slate-900 border border-zinc-200 dark:border-white/5 p-8 rounded-[2.5rem] flex items-center justify-between shadow-sm group hover:shadow-xl transition-all">
+                            <div className="flex items-center gap-6">
+                               <div className="p-5 bg-amber-500/10 rounded-3xl text-amber-500">
+                                  <FileText size={28} />
+                               </div>
+                               <div>
+                                  <h4 className="text-lg font-black text-slate-900 dark:text-white uppercase italic leading-none">{doc.name}.{doc.extension}</h4>
+                                  <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-2">RAISED BY MAKER: {doc.author} • {doc.lastModified}</p>
+                               </div>
+                            </div>
+                            <div className="flex items-center gap-3">
+                               <button className="px-8 py-3 bg-emerald-500 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-xl shadow-emerald-500/20 active:scale-95 transition-all" onClick={() => handleApprove(doc.id)}>Publish (S2)</button>
+                            </div>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="py-32 flex flex-col items-center justify-center bg-white dark:bg-slate-900 border border-dashed border-zinc-200 dark:border-white/10 rounded-[4rem] text-slate-400 opacity-50">
+                          <CheckCircle2 size={64} className="mb-4 text-emerald-500/50" />
+                          <h3 className="text-lg font-black uppercase italic tracking-widest">Workflow Clear</h3>
+                          <p className="text-[10px] font-black uppercase tracking-widest mt-1">No pending audits for your role</p>
+                      </div>
+                    )}
+                 </div>
+              </div>
+            )}
+
+            {activeTab === 'team' && (
+              <div className="animate-in fade-in duration-500 space-y-10">
+                <div className="bg-slate-900 dark:bg-white p-12 rounded-[4rem] shadow-2xl relative overflow-hidden text-center md:text-left flex flex-col md:flex-row justify-between items-center">
+                    <div className="relative z-10 space-y-2">
+                        <h2 className="text-4xl font-black text-white dark:text-slate-950 uppercase italic tracking-tighter leading-none">Access Control</h2>
+                        <p className="text-slate-400 dark:text-slate-500 text-xs font-black uppercase tracking-widest italic">Maker/Checker Hierarchy for ISO Governance</p>
+                    </div>
+                    <div className="mt-8 md:mt-0 relative z-10">
+                       <button className="px-10 py-5 bg-cyan-600 text-white rounded-[2rem] font-black uppercase tracking-[0.2em] shadow-2xl hover:scale-105 active:scale-95 transition-all italic">Add Key Partner</button>
+                    </div>
+                </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
+                   {/* Invite Section */}
+                   <div className="bg-white dark:bg-slate-900 border border-zinc-200 dark:border-white/5 p-10 rounded-[3rem] shadow-sm">
+                      <h3 className="text-xl font-black text-slate-900 dark:text-white uppercase italic mb-8">Invite Workforce</h3>
+                      <div className="space-y-6">
+                        <div className="space-y-2">
+                           <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Email Address</label>
+                           <input value={inviteEmail} onChange={(e) => setInviteEmail(e.target.value)} placeholder="name@lnt.com" className="w-full bg-zinc-50 dark:bg-slate-950 border border-zinc-200 dark:border-white/10 rounded-2xl py-4 px-6 text-sm text-slate-900 dark:text-white outline-none focus:ring-4 focus:ring-cyan-500/10 transition-all" />
+                        </div>
+                        <div className="grid grid-cols-2 gap-2">
+                           {['MAKER', 'CHECKER'].map((r) => (
+                             <button key={r} onClick={() => setInviteRole(r as any)} className={`p-4 rounded-2xl border text-[10px] font-black uppercase tracking-widest transition-all ${inviteRole === r ? 'bg-cyan-500 text-white border-cyan-500 shadow-xl' : 'bg-zinc-50 dark:bg-white/5 border-zinc-100 dark:border-white/5 text-slate-500'}`}>{r === 'MAKER' ? 'Maker' : 'Checker'}</button>
+                           ))}
+                        </div>
+                        <button onClick={handleAddTeamMember} className="w-full bg-slate-900 dark:bg-white py-5 rounded-[1.5rem] text-white dark:text-slate-900 font-black uppercase tracking-widest shadow-2xl flex items-center justify-center gap-3 active:scale-95 transition-all"><UserPlus size={18} /> Send Access Key</button>
+                      </div>
+                   </div>
+
+                   {/* Team List Section */}
+                   <div className="lg:col-span-2 bg-white dark:bg-slate-900 border border-zinc-200 dark:border-white/5 p-10 rounded-[3rem] shadow-sm">
+                      <div className="flex justify-between items-center mb-8 px-2">
+                         <h3 className="text-xl font-black text-slate-900 dark:text-white uppercase italic">Active Workforce</h3>
+                         <div className="flex items-center gap-2 px-3 py-1 bg-zinc-100 dark:bg-white/5 rounded-full"><ShieldCheck size={12} className="text-emerald-500" /><span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Secured</span></div>
+                      </div>
+                      <div className="space-y-4">
+                        {team.map((member) => (
+                          <div key={member.id} className="p-6 bg-zinc-50 dark:bg-white/5 rounded-[2.5rem] flex items-center justify-between border border-transparent hover:border-cyan-500/20 transition-all group">
+                             <div className="flex items-center gap-6">
+                                <div className="w-14 h-14 bg-white dark:bg-slate-800 rounded-3xl flex items-center justify-center text-xl font-black text-slate-300 group-hover:bg-cyan-600 group-hover:text-white transition-all shadow-sm">{member.name[0]}</div>
+                                <div>
+                                   <div className="text-sm font-black text-slate-900 dark:text-white uppercase italic leading-none">{member.name}</div>
+                                   <div className="text-[10px] text-slate-400 font-bold mt-1.5">{member.email}</div>
+                                </div>
+                             </div>
+                             <div className="flex items-center gap-10">
+                                <div className="text-right">
+                                   <div className={`px-4 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest border ${member.role === 'CHECKER' ? 'bg-purple-500/10 border-purple-500/20 text-purple-600 dark:text-purple-400' : 'bg-cyan-500/10 border-cyan-500/20 text-cyan-600 dark:text-cyan-400'}`}>{member.role}</div>
+                                   <div className="text-[8px] text-slate-400 font-black uppercase tracking-widest mt-2">{member.status} • JOINED {member.joinedDate}</div>
+                                </div>
+                                <button className="p-3 text-slate-300 hover:text-red-500 transition-all opacity-0 group-hover:opacity-100"><UserMinus size={18} /></button>
+                             </div>
+                          </div>
+                        ))}
+                      </div>
+                   </div>
+                </div>
+              </div>
+            )}
+            
           </div>
         </main>
       </div>
@@ -245,13 +514,58 @@ const BoqDashboard: React.FC<any> = ({ onClose, onUpgrade }) => {
   );
 };
 
-const SidebarBtn = ({ active, onClick, icon, label }: any) => (
+const NavBtn = ({ active, onClick, icon, label }: any) => (
   <button 
     onClick={onClick} 
-    className={`w-full flex items-center gap-4 p-4 rounded-2xl font-black text-[11px] uppercase tracking-tight transition-all border ${active ? 'bg-orange-500/10 text-orange-600 dark:text-orange-400 border-orange-500/20 shadow-xl' : 'text-slate-400 border-transparent hover:bg-zinc-100 dark:hover:bg-white/5'}`}
+    className={`w-full flex items-center gap-4 p-4 rounded-2xl font-black text-[11px] uppercase tracking-tight transition-all border ${active ? 'bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 border-cyan-500/20 shadow-xl' : 'text-slate-400 border-transparent hover:bg-zinc-100 dark:hover:bg-white/5'}`}
   >
-    {icon} {label}
+    <div className={`shrink-0 transition-transform ${active ? 'scale-110' : ''}`}>{icon}</div>
+    {label}
   </button>
 );
 
-export default BoqDashboard;
+const WorkflowTab = ({ active, onClick, icon, label, count }: any) => (
+  <button onClick={onClick} className={`flex items-center gap-2 px-6 py-2.5 rounded-xl transition-all ${active ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-700 dark:hover:text-white'}`}>
+    {icon}
+    <span className="text-[10px] font-black uppercase tracking-widest">{label}</span>
+    <span className={`px-1.5 py-0.5 rounded-md text-[8px] font-bold ${active ? 'bg-white/20' : 'bg-zinc-100 dark:bg-slate-800'}`}>{count}</span>
+  </button>
+);
+
+const WorkflowCard = ({ title, id, priority, assignee, dueDate, meta }: any) => (
+  <div className="p-6 bg-white dark:bg-slate-900 border border-zinc-100 dark:border-white/10 rounded-3xl hover:border-blue-500 transition-all cursor-pointer group shadow-sm hover:shadow-xl">
+    <div className="flex justify-between items-start mb-4">
+        <span className="text-[10px] font-black text-blue-600 uppercase tracking-widest">{id}</span>
+        <div className={`px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-widest ${priority === 'HIGH' ? 'bg-red-500/10 text-red-500 border border-red-500/20' : 'bg-orange-500/10 text-orange-500 border border-orange-500/20'}`}>
+          {priority}
+        </div>
+    </div>
+    <div className="text-sm font-black text-slate-900 dark:text-white uppercase italic tracking-tight group-hover:text-blue-600 transition-colors mb-4 leading-tight">{title}</div>
+    {meta && <div className="text-[9px] font-bold text-slate-400 uppercase mb-4 px-2 py-1 bg-slate-100 dark:bg-slate-800 rounded-lg w-fit">{meta}</div>}
+    
+    <div className="flex justify-between items-center pt-4 border-t border-zinc-50 dark:border-white/5">
+        <div className="flex items-center gap-2">
+          <div className="w-6 h-6 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-[9px] font-black text-slate-500">{assignee[0]}</div>
+          <span className="text-[9px] font-bold text-slate-500 uppercase truncate max-w-[80px]">{assignee}</span>
+        </div>
+        <div className="flex items-center gap-1.5 text-[9px] font-black text-slate-400 uppercase tracking-widest">
+          <Clock size={10} className="text-blue-500"/> {dueDate.split('-').slice(1).join('/')}
+        </div>
+    </div>
+  </div>
+);
+
+const StatCard = ({ label, value, sub, icon }: any) => (
+  <div className="bg-white dark:bg-slate-900 border border-zinc-200 dark:border-white/5 p-8 rounded-[3rem] shadow-sm flex flex-col justify-between hover:shadow-2xl transition-all cursor-default group">
+    <div className="flex justify-between items-start mb-6">
+      <div className="p-4 bg-zinc-50 dark:bg-white/5 rounded-2xl shadow-inner border border-zinc-100 dark:border-white/5 group-hover:scale-110 transition-transform">{icon}</div>
+    </div>
+    <div>
+      <div className="text-3xl font-black text-slate-900 dark:text-white tracking-tighter mb-1 italic leading-none">{value}</div>
+      <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">{label}</div>
+      <div className="text-[9px] text-slate-500 font-bold uppercase tracking-tight">{sub}</div>
+    </div>
+  </div>
+);
+
+export default ProjectSuite;
