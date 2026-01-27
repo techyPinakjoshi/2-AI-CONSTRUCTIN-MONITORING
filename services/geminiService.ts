@@ -2,9 +2,18 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { ProjectStage } from "../types";
 
-// Always use named parameter for apiKey and obtain it directly from process.env.API_KEY.
+/**
+ * Safely obtains the Gemini API client.
+ * Includes a check for process.env availability to prevent ReferenceErrors.
+ */
 const getAiClient = () => {
-  return new GoogleGenAI({ apiKey: process.env.API_KEY as string });
+  const apiKey = (typeof process !== 'undefined' && process.env?.API_KEY) || (window as any).process?.env?.API_KEY;
+  if (!apiKey) {
+    console.warn("Gemini API Key is missing. AI features will be limited.");
+    // We return a mock-friendly client or throw a clear error that the service can catch
+    throw new Error("MISSING_API_KEY");
+  }
+  return new GoogleGenAI({ apiKey });
 };
 
 /**

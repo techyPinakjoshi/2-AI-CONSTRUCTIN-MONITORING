@@ -4,10 +4,12 @@ import {
   Send, Bot, User, Building2, Waves, Milestone, FlaskConical, 
   Sparkles, Globe, Moon, Sun, ArrowRight, MessageSquare,
   Box, Calculator, Video, ShieldCheck, Plus, Mic, Loader2,
-  LayoutDashboard, HardDrive, Briefcase, FileText
+  LayoutDashboard, HardDrive, Briefcase, FileText, Presentation, Layers
 } from 'lucide-react';
 import { getRegulatoryAdvice } from '../services/geminiService';
 import { ThemeContext } from '../App';
+import PitchDeck from './PitchDeck';
+import BimSynthesisView from './BimSynthesisView';
 
 interface Message { 
   role: 'user' | 'assistant'; 
@@ -39,6 +41,8 @@ const LandingChat: React.FC<LandingChatProps> = ({ onAuthRequired, onEnterApp, o
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
+  const [showPitchDeck, setShowPitchDeck] = useState(false);
+  const [showBimSynthesis, setShowBimSynthesis] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -69,7 +73,7 @@ const LandingChat: React.FC<LandingChatProps> = ({ onAuthRequired, onEnterApp, o
     <div className="flex h-screen bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100 overflow-hidden font-sans relative">
       
       {/* SIDEBAR */}
-      <aside className="hidden lg:flex w-72 bg-white dark:bg-slate-900 border-r border-zinc-200 dark:border-white/5 flex-col p-6 overflow-y-auto shrink-0 z-50 shadow-2xl relative">
+      <aside className="hidden lg:flex w-72 bg-white dark:bg-slate-900 border-r border-zinc-200 dark:border-white/5 flex col p-6 overflow-y-auto shrink-0 z-50 shadow-2xl relative">
         <div className="mb-10 flex items-center gap-3">
           <div className="w-12 h-12 rounded-xl overflow-hidden border-2 border-cyan-500/30 shadow-lg bg-slate-900 flex items-center justify-center">
              <img 
@@ -95,9 +99,21 @@ const LandingChat: React.FC<LandingChatProps> = ({ onAuthRequired, onEnterApp, o
             <section>
               <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2 mb-3">Site Intelligence</h3>
               <div className="space-y-1">
-                  <ServiceLink icon={<Box size={14}/>} label="BIM Synthesis" onClick={onEnterApp} />
+                  <ServiceLink icon={<Box size={14}/>} label="BIM Synthesis" onClick={() => setShowBimSynthesis(true)} />
                   <ServiceLink icon={<Video size={14}/>} label="AI Vision Monitor" onClick={onEnterApp} />
                   <ServiceLink icon={<Calculator size={14}/>} label="2D to BOQ Engine" onClick={onOpenBoqExtractor} />
+              </div>
+            </section>
+
+            <section>
+              <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2 mb-3">iCreate Pitch</h3>
+              <div className="space-y-1">
+                  <ServiceLink 
+                    icon={<Presentation size={14} className="text-purple-500" />} 
+                    label="View Pitch Deck" 
+                    onClick={() => setShowPitchDeck(true)} 
+                    className="border border-purple-500/20 bg-purple-500/5"
+                  />
               </div>
             </section>
         </nav>
@@ -217,7 +233,7 @@ const LandingChat: React.FC<LandingChatProps> = ({ onAuthRequired, onEnterApp, o
         {!messages.length && (
           <div className="mt-4 w-full max-w-2xl animate-in slide-in-from-bottom-4 duration-1000 space-y-4">
              
-             {/* 2D TO BOQ CARD - PROMINENT AS REQUESTED */}
+             {/* 2D TO BOQ CARD */}
              <button 
                 onClick={onOpenBoqExtractor}
                 className="w-full group relative overflow-hidden bg-gradient-to-br from-amber-500/10 to-orange-500/5 border-2 border-amber-500/20 p-8 rounded-[2.5rem] flex items-center justify-between shadow-xl transition-all hover:border-amber-500 hover:scale-[1.01] active:scale-95"
@@ -233,6 +249,25 @@ const LandingChat: React.FC<LandingChatProps> = ({ onAuthRequired, onEnterApp, o
                 </div>
                 <div className="w-12 h-12 bg-white dark:bg-white/5 rounded-full flex items-center justify-center text-slate-900 dark:text-white group-hover:bg-amber-600 group-hover:text-white transition-all shadow-lg">
                    <Plus size={24} />
+                </div>
+             </button>
+
+             {/* 2D PLAN TO BIM MODEL CARD (NEW) */}
+             <button 
+                onClick={() => setShowBimSynthesis(true)}
+                className="w-full group relative overflow-hidden bg-gradient-to-br from-cyan-500/10 to-blue-500/5 border-2 border-cyan-500/20 p-8 rounded-[2.5rem] flex items-center justify-between shadow-xl transition-all hover:border-cyan-500 hover:scale-[1.01] active:scale-95"
+             >
+                <div className="flex items-center gap-6">
+                   <div className="p-5 bg-gradient-to-br from-cyan-500 to-blue-600 rounded-3xl text-white shadow-xl shadow-cyan-600/20">
+                      <Box size={30} />
+                   </div>
+                   <div className="text-left">
+                      <h3 className="text-2xl font-black text-slate-900 dark:text-white uppercase italic tracking-tighter leading-none">2d plan to BIM model</h3>
+                      <p className="text-[10px] text-slate-500 font-bold uppercase tracking-[0.2em] mt-2">AI-Powered 3D Digital Twin Generation</p>
+                   </div>
+                </div>
+                <div className="w-12 h-12 bg-white dark:bg-white/5 rounded-full flex items-center justify-center text-slate-900 dark:text-white group-hover:bg-cyan-600 group-hover:text-white transition-all shadow-lg">
+                   <ArrowRight size={24} />
                 </div>
              </button>
 
@@ -267,7 +302,7 @@ const LandingChat: React.FC<LandingChatProps> = ({ onAuthRequired, onEnterApp, o
                    </div>
                 </button>
                 <button onClick={onEnterApp} className="p-5 bg-white dark:bg-slate-900 border border-zinc-200 dark:border-white/10 rounded-3xl flex items-center gap-4 hover:border-purple-500/50 transition-all shadow-xl group">
-                   <div className="p-3 bg-purple-500/10 rounded-2xl text-purple-500 group-hover:scale-110 transition-transform"><Box size={20}/></div>
+                   <div className="p-3 bg-purple-500/10 rounded-2xl text-purple-500 group-hover:scale-110 transition-transform"><Layers size={20}/></div>
                    <div>
                      <span className="text-[10px] font-black uppercase tracking-widest text-slate-800 dark:text-slate-100 block">Digital Twins</span>
                      <span className="text-[9px] text-slate-400 font-bold uppercase">BIM Reconstruction</span>
@@ -277,14 +312,17 @@ const LandingChat: React.FC<LandingChatProps> = ({ onAuthRequired, onEnterApp, o
           </div>
         )}
       </main>
+
+      {showPitchDeck && <PitchDeck onClose={() => setShowPitchDeck(false)} />}
+      {showBimSynthesis && <BimSynthesisView onClose={() => setShowBimSynthesis(false)} />}
       
       {children}
     </div>
   );
 };
 
-const ServiceLink = ({ icon, label, onClick, active }: any) => (
-  <button onClick={onClick} className={`w-full flex items-center gap-3 p-3 rounded-xl transition-all text-left group ${active ? 'bg-cyan-500/10 text-cyan-600 dark:text-cyan-400' : 'text-slate-500 hover:bg-zinc-100 dark:hover:bg-white/5'}`}>
+const ServiceLink = ({ icon, label, onClick, active, className }: any) => (
+  <button onClick={onClick} className={`w-full flex items-center gap-3 p-3 rounded-xl transition-all text-left group ${active ? 'bg-cyan-500/10 text-cyan-600 dark:text-cyan-400' : 'text-slate-500 hover:bg-zinc-100 dark:hover:bg-white/5'} ${className}`}>
     <div className={`p-2 rounded-lg ${active ? 'bg-cyan-600 text-white' : 'bg-zinc-50 dark:bg-slate-800'} group-hover:scale-110 transition-transform shadow-sm shrink-0 flex items-center justify-center`}>{icon}</div>
     <span className="text-[11px] font-black uppercase tracking-tight truncate">{label}</span>
   </button>

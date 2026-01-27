@@ -15,12 +15,21 @@ import BoqExtractor from './components/BoqExtractor';
 import ProjectCreationModal from './components/ProjectCreationModal';
 import BillingModal from './components/BillingModal';
 import Tooltip from './components/Tooltip';
-import { LayoutDashboard, Package, Activity, LogOut, ShieldCheck, ClipboardList, Briefcase, Zap, Crown, Sun, Moon, Shield } from 'lucide-react';
+import { LayoutDashboard, Package, Activity, LogOut, ShieldCheck, ClipboardList, Briefcase, Zap, Crown, Sun, Moon, Shield, RefreshCw, AlertCircle } from 'lucide-react';
 import { fetchUserProjects, saveProjectData } from './services/dbService';
 import { supabase } from './services/supabaseClient';
 
 // Theme Context
 export const ThemeContext = createContext({ isDark: true, toggleTheme: () => {} });
+
+// Safe environment check
+const getApiKey = () => {
+  try {
+    return (typeof process !== 'undefined' && process.env) ? process.env.API_KEY : null;
+  } catch (e) {
+    return null;
+  }
+};
 
 // Brand logo constant
 const APP_LOGO_SVG = `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='%230f172a'/%3E%3Cpath d='M20 45 Q50 15 80 45 L80 55 Q50 35 20 55 Z' fill='%23f97316'/%3E%3Crect x='30' y='55' width='40' height='30' rx='8' fill='white'/%3E%3Ccircle cx='40' cy='70' r='4' fill='%2306b6d4'/%3E%3Ccircle cx='60' cy='70' r='4' fill='%2306b6d4'/%3E%3Cpath d='M45 80 Q50 85 55 80' stroke='%230f172a' fill='none' stroke-width='2'/%3E%3C/svg%3E`;
@@ -44,6 +53,7 @@ const App: React.FC = () => {
   const [playbackSession, setPlaybackSession] = useState<TourSession | null>(null);
   const [isMultiCameraModalOpen, setIsMultiCameraModalOpen] = useState(false);
   const [uploadedBimName, setUploadedBimName] = useState<string | null>(null);
+  const [connectionError, setConnectionError] = useState(false);
 
   const [layers, setLayers] = useState<LayerVisibility>({
     structural: true, pipes: false, electrical: false, interiors: false, facade: false,
@@ -67,29 +77,53 @@ const App: React.FC = () => {
       const projects = await fetchUserProjects(user.id);
       setUserProjects(projects);
       if (projects.length > 0) setAuthState(prev => ({ ...prev, isSubscribed: true }));
-    } catch (e) { console.error(e); }
+    } catch (e) { 
+      console.error("Project fetch failed, continuing as guest", e); 
+      setAuthState(prev => ({ ...prev, loading: false }));
+    }
   }, []);
 
   const handleLogout = useCallback(async () => {
-    await supabase.auth.signOut();
+    try {
+      await supabase.auth.signOut();
+    } catch (e) {}
     setAuthState({ user: null, loading: false, isAdmin: false, isSubscribed: false });
     setView('landing');
     setActiveProject(null);
   }, []);
 
   useEffect(() => {
+    // Fail-safe for long loading times
+    const loadingTimeout = setTimeout(() => {
+      if (authState.loading) {
+        console.warn("Authentication handshake taking too long. Enabling fail-safe.");
+        setConnectionError(true);
+      }
+    }, 8000);
+
     const initAuth = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session?.user) handleLoginSuccess(session.user);
-      else setAuthState(prev => ({ ...prev, loading: false }));
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.user) await handleLoginSuccess(session.user);
+        else setAuthState(prev => ({ ...prev, loading: false }));
+      } catch (e) {
+        console.error("Auth init failed", e);
+        setAuthState(prev => ({ ...prev, loading: false }));
+      }
     };
+    
     initAuth();
+    
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       if (session?.user) handleLoginSuccess(session.user);
       else if (_event === 'SIGNED_OUT') handleLogout();
     });
-    return () => subscription.unsubscribe();
-  }, [handleLoginSuccess, handleLogout]);
+    
+    return () => {
+      clearTimeout(loadingTimeout);
+      subscription.unsubscribe();
+    };
+  }, [handleLoginSuccess, handleLogout, authState.loading]);
 
   const startPremiumOnboarding = () => {
     if (!authState.user) { setShowAuth(true); return; }
@@ -122,18 +156,33 @@ const App: React.FC = () => {
   };
 
   const handleBoqSync = (boqData: any) => {
-    // Logic to save BOQ to active project in DB
     console.log("Syncing BOQ to Project Suite:", boqData);
     setView('project-suite');
-    // Here we could trigger a toast or notification
   };
 
   if (authState.loading) return (
-    <div className="h-screen w-full bg-slate-950 flex flex-col items-center justify-center">
+    <div className="h-screen w-full bg-slate-950 flex flex-col items-center justify-center p-6 text-center">
       <div className="w-16 h-16 rounded-2xl overflow-hidden border-2 border-cyan-500 animate-pulse mb-6 bg-slate-900 p-2 flex items-center justify-center">
          <img src={FALLBACK_LOGO} alt="Loading" className="w-full h-full object-contain" onError={(e) => { e.currentTarget.src = APP_LOGO_SVG; }} />
       </div>
-      <div className="text-[10px] font-black text-slate-500 uppercase tracking-[0.4em]">Neural Handshake...</div>
+      
+      {!connectionError ? (
+        <div className="text-[10px] font-black text-slate-500 uppercase tracking-[0.4em] animate-pulse">Neural Handshake...</div>
+      ) : (
+        <div className="animate-in fade-in zoom-in duration-500 max-w-xs">
+          <div className="flex items-center gap-2 justify-center text-amber-500 mb-2">
+            <AlertCircle size={16} />
+            <span className="text-[10px] font-bold uppercase tracking-widest">Network latency detected</span>
+          </div>
+          <p className="text-xs text-slate-400 mb-6">Connecting to global coordination network is taking longer than expected.</p>
+          <button 
+            onClick={() => setAuthState(prev => ({ ...prev, loading: false }))}
+            className="px-6 py-2 bg-slate-800 text-white text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-slate-700 transition-all flex items-center gap-2 mx-auto"
+          >
+            <RefreshCw size={12} /> Continue as Guest
+          </button>
+        </div>
+      )}
     </div>
   );
 
@@ -195,7 +244,7 @@ const App: React.FC = () => {
                   <button onClick={handleLogout} className="p-3 rounded-2xl text-slate-400 hover:text-red-500 transition-all"><LogOut size={24} /></button>
                 </Tooltip>
                 
-                <div className="w-10 h-10 rounded-2xl bg-slate-200 dark:bg-slate-800 flex items-center justify-center text-xs font-black border border-zinc-300 dark:border-slate-700">{authState.user?.email?.[0].toUpperCase()}</div>
+                <div className="w-10 h-10 rounded-2xl bg-slate-200 dark:bg-slate-800 flex items-center justify-center text-xs font-black border border-zinc-300 dark:border-slate-700">{authState.user?.email?.[0].toUpperCase() || 'G'}</div>
               </div>
             </nav>
 
