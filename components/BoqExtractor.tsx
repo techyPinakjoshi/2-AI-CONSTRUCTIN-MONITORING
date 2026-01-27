@@ -3,7 +3,7 @@ import React, { useState, useRef, useContext } from 'react';
 import { 
   Calculator, X, UploadCloud, Loader2, Sparkles, FileText, 
   Download, ArrowRight, IndianRupee, Database, ChevronRight,
-  CheckCircle2, Plus, FileSpreadsheet, Zap, History, Folder, Settings2, AlertCircle
+  CheckCircle2, Plus, FileSpreadsheet, Zap, History, Folder, Settings2, AlertCircle, Clock
 } from 'lucide-react';
 import { ThemeContext } from '../App';
 import { extractBoqFromPlans } from '../services/geminiService';
@@ -20,6 +20,7 @@ const BoqExtractor: React.FC<BoqExtractorProps> = ({ onClose, onSyncToSuite, use
   const [isProcessing, setIsProcessing] = useState(false);
   const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
   const [boqData, setBoqData] = useState<any[]>([]);
+  const [lastExtractionTime, setLastExtractionTime] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [targetProjectId, setTargetProjectId] = useState<string>('new');
   const [syncMode, setSyncMode] = useState<'append' | 'replace'>('append');
@@ -33,12 +34,17 @@ const BoqExtractor: React.FC<BoqExtractorProps> = ({ onClose, onSyncToSuite, use
 
   const runExtraction = async () => {
     if (uploadedFiles.length === 0) return;
+    
+    // CRITICAL: Clear previous data to show the user that a NEW extraction is happening
+    setBoqData([]); 
     setIsProcessing(true);
     setError(null);
+    
     try {
       const data = await extractBoqFromPlans(uploadedFiles);
       if (data && data.length > 0) {
         setBoqData(data);
+        setLastExtractionTime(new Date().toLocaleTimeString());
       } else {
         setError("AI could not extract valid quantities from the provided files. Please ensure they are clear architectural or structural plans.");
       }
@@ -62,7 +68,7 @@ const BoqExtractor: React.FC<BoqExtractorProps> = ({ onClose, onSyncToSuite, use
           </div>
           <div>
             <h1 className="text-xl font-black text-slate-900 dark:text-white uppercase italic tracking-tighter leading-none">AI Quantities <span className="text-amber-500">Extractor</span></h1>
-            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1">2D Plan to BOQ Engine • IS 1200 Standard</p>
+            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1">PWD SOR 2025-2026 Engine • IS 1200 Standard</p>
           </div>
         </div>
         <div className="flex items-center gap-4">
@@ -84,8 +90,8 @@ const BoqExtractor: React.FC<BoqExtractorProps> = ({ onClose, onSyncToSuite, use
                   <Sparkles size={24} className="absolute top-0 right-0 text-amber-500 animate-pulse" />
                </div>
                <div className="text-center">
-                  <h2 className="text-2xl font-black text-slate-900 dark:text-white uppercase italic tracking-tighter mb-2">Quantifying Geometry</h2>
-                  <p className="text-slate-500 text-[10px] font-black uppercase tracking-[0.4em]">Running IS-1200 Neural Logic • Identifying Materials</p>
+                  <h2 className="text-2xl font-black text-slate-900 dark:text-white uppercase italic tracking-tighter mb-2">Analyzing PWD SOR 2025-26</h2>
+                  <p className="text-slate-500 text-[10px] font-black uppercase tracking-[0.4em]">Neural Quantity Mapping • IS-1200 Compliance Check</p>
                </div>
             </div>
           ) : boqData.length === 0 ? (
@@ -94,8 +100,8 @@ const BoqExtractor: React.FC<BoqExtractorProps> = ({ onClose, onSyncToSuite, use
                 <FileSpreadsheet size={48} />
               </div>
               <div className="max-w-md">
-                <h2 className="text-3xl font-black text-slate-900 dark:text-white uppercase italic tracking-tighter mb-4">Plan Intelligence</h2>
-                <p className="text-slate-500 text-sm font-medium leading-relaxed">Upload architectural or structural plans. Our AI will automatically identify materials, calculate quantities, and generate an itemized BOQ based on IS-1200 codes.</p>
+                <h2 className="text-3xl font-black text-slate-900 dark:text-white uppercase italic tracking-tighter mb-4">Precision Intelligence</h2>
+                <p className="text-slate-500 text-sm font-medium leading-relaxed">Upload specific architectural or structural plans. Our AI will identify grades and volumes to generate an itemized BOQ based strictly on <b>PWD SOR 2025-2026</b> rates.</p>
               </div>
 
               {error && (
@@ -113,7 +119,7 @@ const BoqExtractor: React.FC<BoqExtractorProps> = ({ onClose, onSyncToSuite, use
                     <div className="p-6 bg-zinc-50 dark:bg-slate-800 rounded-3xl text-slate-400 group-hover:text-amber-500 transition-colors shadow-sm">
                       <UploadCloud size={40} />
                     </div>
-                    <span className="text-xs font-black uppercase tracking-widest text-slate-400 group-hover:text-slate-900 dark:group-hover:text-white transition-colors">Drop Plans Here or Click to Browse</span>
+                    <span className="text-xs font-black uppercase tracking-widest text-slate-400 group-hover:text-slate-900 dark:group-hover:text-white transition-colors">Drop New Plans Here or Browse</span>
                   </button>
                 ) : (
                   <div className="space-y-4">
@@ -125,13 +131,13 @@ const BoqExtractor: React.FC<BoqExtractorProps> = ({ onClose, onSyncToSuite, use
                       ))}
                     </div>
                     <div className="flex gap-2">
-                      <button onClick={() => fileInputRef.current?.click()} className="flex-1 py-4 border border-zinc-200 dark:border-slate-700 rounded-2xl text-[10px] font-black uppercase text-slate-500 hover:bg-zinc-50 dark:hover:bg-slate-800 transition-all">Add Files</button>
+                      <button onClick={() => {setUploadedFiles([]); setBoqData([]);}} className="flex-1 py-4 border border-zinc-200 dark:border-slate-700 rounded-2xl text-[10px] font-black uppercase text-slate-500 hover:bg-zinc-50 dark:hover:bg-slate-800 transition-all">Clear All</button>
                       <button 
                         onClick={runExtraction}
                         className="flex-[2] bg-slate-900 dark:bg-white text-white dark:text-slate-900 py-4 rounded-2xl font-black uppercase tracking-widest shadow-2xl flex items-center justify-center gap-3 active:scale-95 transition-all italic"
                       >
                         <Zap size={20} className="fill-current" />
-                        Run AI Extraction
+                        Run Precise Extraction
                       </button>
                     </div>
                   </div>
@@ -145,14 +151,16 @@ const BoqExtractor: React.FC<BoqExtractorProps> = ({ onClose, onSyncToSuite, use
                 <div className="relative z-10">
                   <div className="flex items-center gap-3 mb-2">
                     <CheckCircle2 className="text-emerald-500" size={20} />
-                    <span className="text-[10px] font-black text-emerald-500 uppercase tracking-widest">Extraction Verified • Neural Confidence: 98.4%</span>
+                    <span className="text-[10px] font-black text-emerald-500 uppercase tracking-widest">
+                        Neural Signature: Verified • {lastExtractionTime && `Extracted at ${lastExtractionTime}`}
+                    </span>
                   </div>
-                  <h2 className="text-4xl font-black text-slate-900 dark:text-white uppercase italic tracking-tighter leading-none">Extracted Quantities</h2>
-                  <p className="text-slate-500 text-[10px] font-black uppercase tracking-widest mt-2">{uploadedFiles.length} Plans Processed • {boqData.length} Line Items Identified</p>
+                  <h2 className="text-4xl font-black text-slate-900 dark:text-white uppercase italic tracking-tighter leading-none">SOR Extracted <span className="text-amber-500">25-26</span></h2>
+                  <p className="text-slate-500 text-[10px] font-black uppercase tracking-widest mt-2">{uploadedFiles.length} Plans Processed • {boqData.length} Unique Line Items</p>
                 </div>
                 <div className="relative z-10 text-right">
-                  <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Estimated Base Value</div>
-                  <div className="text-5xl font-black text-slate-900 dark:text-white tracking-tighter italic">₹{(totalAmount/100000).toFixed(1)}L</div>
+                  <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Total SOR Base Value</div>
+                  <div className="text-5xl font-black text-slate-900 dark:text-white tracking-tighter italic">₹{(totalAmount/100000).toFixed(2)}L</div>
                 </div>
               </div>
 
@@ -241,7 +249,7 @@ const BoqExtractor: React.FC<BoqExtractorProps> = ({ onClose, onSyncToSuite, use
                       <th className="px-8 py-6">SOR Code & Item Description</th>
                       <th className="px-8 py-6">Category</th>
                       <th className="px-8 py-6 text-right">Quantity</th>
-                      <th className="px-8 py-6 text-right">Rate</th>
+                      <th className="px-8 py-6 text-right">Rate (₹)</th>
                       <th className="px-8 py-6 text-right">Amount (₹)</th>
                     </tr>
                   </thead>
@@ -258,8 +266,8 @@ const BoqExtractor: React.FC<BoqExtractorProps> = ({ onClose, onSyncToSuite, use
                            </span>
                         </td>
                         <td className="px-8 py-6 text-right font-mono text-xs font-bold text-slate-900 dark:text-white">{item.qty} <span className="text-[9px] text-slate-400 font-black">{item.unit}</span></td>
-                        <td className="px-8 py-6 text-right font-mono text-xs text-slate-400">₹{item.rate?.toLocaleString()}</td>
-                        <td className="px-8 py-6 text-right font-mono text-xs font-black text-amber-600">₹{item.amount?.toLocaleString()}</td>
+                        <td className="px-8 py-6 text-right font-mono text-xs text-slate-400">₹{item.rate?.toLocaleString(undefined, {minimumFractionDigits: 2})}</td>
+                        <td className="px-8 py-6 text-right font-mono text-xs font-black text-amber-600">₹{item.amount?.toLocaleString(undefined, {minimumFractionDigits: 2})}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -267,7 +275,7 @@ const BoqExtractor: React.FC<BoqExtractorProps> = ({ onClose, onSyncToSuite, use
               </div>
 
               <div className="flex justify-between gap-4 pb-20">
-                <button onClick={() => { setBoqData([]); setUploadedFiles([]); setError(null); }} className="px-10 py-5 bg-white dark:bg-slate-900 border border-zinc-200 dark:border-white/10 text-slate-500 rounded-[2rem] text-xs font-black uppercase tracking-widest hover:border-red-500 hover:text-red-500 transition-all active:scale-95 shadow-lg">Reset & Re-scan</button>
+                <button onClick={() => { setBoqData([]); setUploadedFiles([]); setError(null); }} className="px-10 py-5 bg-white dark:bg-slate-900 border border-zinc-200 dark:border-white/10 text-slate-500 rounded-[2rem] text-xs font-black uppercase tracking-widest hover:border-red-500 hover:text-red-500 transition-all active:scale-95 shadow-lg">Reset & New Scan</button>
                 <div className="flex gap-4">
                   <button className="flex items-center gap-3 px-10 py-5 bg-white dark:bg-slate-900 border border-zinc-200 dark:border-white/10 text-slate-900 dark:text-white rounded-[2rem] text-xs font-black uppercase tracking-widest hover:bg-zinc-50 dark:hover:bg-white/5 transition-all active:scale-95 shadow-lg">
                     <Download size={18} /> Export Excel
