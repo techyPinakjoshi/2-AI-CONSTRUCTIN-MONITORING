@@ -25,77 +25,55 @@ const fileToDataPart = async (file: File) => {
 };
 
 /**
- * Extracts a unified BOQ from construction plans using Market Benchmarks.
- * Fixes the scaling issue where Cr projects were shown as Lacs.
+ * Extracts a unified BOQ from construction plans.
+ * Focuses strictly on quantities and geometric accuracy.
+ * Pricing is removed to ensure focus on technical data.
  */
-export const extractBoqFromPlans = async (files: File[]) => {
+export const extractBoqFromPlans = async (files: File[], chatHistory: any[] = []) => {
   try {
     const ai = getAiClient();
     
     if (!ai) {
-      console.warn("Using simulated Market Benchmark data (API_KEY not found)");
-      // Generate a seed that reflects a 'Crore' scale project (₹1.5Cr - ₹3.5Cr)
+      console.warn("Using simulated Quantities (API_KEY not found)");
       const fileHash = files.reduce((acc, f) => acc + f.name.length + f.size, 0);
-      const projectScaleSqFt = 5000 + (fileHash % 10000); // 5k to 15k sqft
-      const marketRatePerSqFt = 2400 + (fileHash % 400); // ₹2400 - ₹2800
-      const totalTarget = projectScaleSqFt * marketRatePerSqFt;
-
-      return [
-        { 
-          id: `MKT-${fileHash % 1000}`, 
-          code: "STR-001", 
-          category: "Civil & Structural", 
-          description: `RCC Framework for approx ${projectScaleSqFt.toLocaleString()} sq.ft. BUA including Footings, Columns, and Slabs at Market Rate.`, 
-          qty: projectScaleSqFt, 
-          unit: "sqft", 
-          rate: marketRatePerSqFt * 0.45, // Civil usually 45% of total
-          amount: totalTarget * 0.45 
-        },
-        { 
-          id: `MKT-${(fileHash % 1000) + 1}`, 
-          code: "FIN-001", 
-          category: "Finishing & MEP", 
-          description: "Internal tiling, Plumbing, and Electrical rough-ins as per luxury benchmarks.", 
-          qty: projectScaleSqFt, 
-          unit: "sqft", 
-          rate: marketRatePerSqFt * 0.35, 
-          amount: totalTarget * 0.35 
-        },
-        { 
-          id: `MKT-${(fileHash % 1000) + 2}`, 
-          code: "EXT-001", 
-          category: "External Works", 
-          description: "Facade glazing and external development works.", 
-          qty: projectScaleSqFt, 
-          unit: "sqft", 
-          rate: marketRatePerSqFt * 0.20, 
-          amount: totalTarget * 0.20 
-        }
-      ];
+      const projectScaleSqFt = 5000 + (fileHash % 10000);
+      
+      return {
+        boqItems: [
+          { id: "Q-1", code: "CIV-01", category: "Excavation", description: "Bulk excavation for foundation pits", qty: 450 + (fileHash % 100), unit: "cum", confidence: 0.95 },
+          { id: "Q-2", code: "STR-02", category: "Concrete", description: "Grade M30 concrete for footings and columns", qty: 120 + (fileHash % 50), unit: "cum", confidence: 0.88 },
+          { id: "Q-3", code: "REI-03", category: "Reinforcement", description: "TMT Fe 500D steel reinforcement", qty: 4500 + (fileHash % 1000), unit: "kg", confidence: 0.75 }
+        ],
+        clarificationQuestions: [
+          "The scale bar on Drawing A-102 is partially obscured. Please confirm if 1cm = 2m.",
+          "Structural plan S-01 shows 14 columns, but Architectural layout shows 12. Which should be the primary reference?"
+        ]
+      };
     }
 
     const systemInstruction = `
-      You are a Senior Project Management Consultant. 
-      Analyze the uploaded drawing images to estimate the TOTAL construction cost.
+      You are a specialized Construction Quantity Surveyor. Your goal is to extract technical BOQ items with EXTREME geometric accuracy.
       
-      STRICT PRICING RULES:
-      1. DO NOT use PWD SOR. Use CURRENT MARKET RATES for A-grade construction in India (e.g., GIFT City, Mumbai, Delhi).
-      2. SCALE DETECTION: Identify dimensions. If a drawing represents a multi-story building or a large bungalow, the total cost MUST be in the range of ₹1 Crore to ₹10 Crore+. 
-      3. A common error is calculating per sq.ft. but missing the total quantity. Ensure 'qty' reflects the ENTIRE built-up area shown.
-      4. Standard Market Benchmarks: 
-         - Structure: ₹1,100 - ₹1,400 per sq.ft.
-         - Finishing: ₹800 - ₹1,200 per sq.ft.
-         - MEP: ₹400 - ₹600 per sq.ft.
+      RULES:
+      1. DO NOT provide pricing, rates, or monetary values. Focus ONLY on Quantities (sqft, cum, kg, running meters).
+      2. If you are unsure about a dimension or scale, DO NOT guess. Instead, list it in 'clarificationQuestions'.
+      3. Identify the Project Scale (Built-up Area) precisely.
+      4. Use IS 1200 measurement protocols.
+      5. Look for annotations, schedules, and scale bars.
       
-      DIFFERENTIATION:
-      - Extract unique project titles or drawing numbers from the title block.
-      
-      OUTPUT:
-      - Return ONLY a JSON array of objects.
+      CONVERSATIONAL REFINEMENT:
+      If chat history is provided, use the user's answers to refine the quantities.
     `;
 
-    const parts: any[] = [{ text: "Extract a high-accuracy Market-Rate BOQ. Pay extreme attention to SCALE to ensure the total reflects the actual project size (often in Crores)." }];
+    const parts: any[] = [
+      { text: "Extract accurate quantities from these plans. If scale is ambiguous, ask me to clarify." }
+    ];
     
+    // Add chat context if refining
+    if (chatHistory.length > 0) {
+      parts.push({ text: `Context from previous conversation: ${JSON.stringify(chatHistory)}` });
+    }
+
     for (const file of files) {
       if (file.type.startsWith('image/')) {
         const imagePart = await fileToDataPart(file);
@@ -110,29 +88,38 @@ export const extractBoqFromPlans = async (files: File[]) => {
         systemInstruction,
         responseMimeType: "application/json",
         responseSchema: {
-          type: Type.ARRAY,
-          items: {
-            type: Type.OBJECT,
-            properties: {
-              id: { type: Type.STRING },
-              code: { type: Type.STRING },
-              category: { type: Type.STRING },
-              description: { type: Type.STRING },
-              qty: { type: Type.NUMBER },
-              unit: { type: Type.STRING },
-              rate: { type: Type.NUMBER },
-              amount: { type: Type.NUMBER },
+          type: Type.OBJECT,
+          properties: {
+            boqItems: {
+              type: Type.ARRAY,
+              items: {
+                type: Type.OBJECT,
+                properties: {
+                  id: { type: Type.STRING },
+                  code: { type: Type.STRING },
+                  category: { type: Type.STRING },
+                  description: { type: Type.STRING },
+                  qty: { type: Type.NUMBER },
+                  unit: { type: Type.STRING },
+                  confidence: { type: Type.NUMBER }
+                },
+                required: ["id", "code", "category", "description", "qty", "unit"]
+              }
             },
-            required: ["id", "code", "category", "description", "qty", "unit", "rate", "amount"],
+            clarificationQuestions: {
+              type: Type.ARRAY,
+              items: { type: Type.STRING }
+            }
           },
+          required: ["boqItems", "clarificationQuestions"]
         },
       }
     });
 
-    return JSON.parse(result.text || '[]');
+    return JSON.parse(result.text || '{"boqItems": [], "clarificationQuestions": []}');
   } catch (error) {
     console.error("BOQ Extraction error:", error);
-    return [];
+    return { boqItems: [], clarificationQuestions: ["Error during extraction. Please re-upload clearer plans."] };
   }
 };
 
