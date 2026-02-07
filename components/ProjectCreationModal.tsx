@@ -1,170 +1,133 @@
 
 import React, { useState } from 'react';
-import { X, Building2, Users, Mail, Plus, CheckCircle2, Crown, Zap, Home, Building, Factory } from 'lucide-react';
+import { X, Building2, Zap, Home, Building, Factory, Loader2, ArrowRight, CheckCircle2, Calculator, Box, Layers } from 'lucide-react';
 import { PROJECT_TEMPLATES } from '../constants';
 
 interface ProjectCreationModalProps {
   onClose: () => void;
   onCreate: (project: any) => void;
+  isAuthenticated: boolean;
+  onAuthRequired: () => void;
 }
 
 const ProjectCreationModal: React.FC<ProjectCreationModalProps> = ({ onClose, onCreate }) => {
   const [name, setName] = useState('');
-  const [selectedTemplate, setSelectedTemplate] = useState(PROJECT_TEMPLATES[0].id);
-  const [teamEmail, setTeamEmail] = useState('');
-  const [teamMembers, setTeamMembers] = useState<string[]>([]);
+  const [selectedTemplate, setSelectedTemplate] = useState<string | null>(null);
+  const [services, setServices] = useState<{boq: boolean, bim: boolean}>({ boq: true, bim: true });
   const [isCreating, setIsCreating] = useState(false);
 
-  const addMember = () => {
-    if (teamEmail && teamEmail.includes('@') && !teamMembers.includes(teamEmail)) {
-      setTeamMembers([...teamMembers, teamEmail]);
-      setTeamEmail('');
-    }
-  };
+  const isFormValid = name.trim().length >= 3;
 
-  const removeMember = (email: string) => {
-    setTeamMembers(teamMembers.filter(m => m !== email));
-  };
-
-  const handleCreate = async () => {
-    if (!name) return;
+  const handleCreate = () => {
+    if (!isFormValid || isCreating) return;
     setIsCreating(true);
-    const template = PROJECT_TEMPLATES.find(t => t.id === selectedTemplate);
-    // Simulate setup
-    await new Promise(r => setTimeout(r, 2000));
-    onCreate({ 
-      name, 
-      template: selectedTemplate,
-      defaultLayers: template?.defaultLayers,
-      teamMembers 
-    });
+    
+    setTimeout(() => {
+      onCreate({ 
+        name, 
+        template: selectedTemplate || 'Custom Infrastructure',
+        services,
+        status: 'INITIALIZING',
+        health: 'HEALTHY',
+        boq: [],
+        bimData: null,
+        clarifications: [],
+        documents: [],
+        activityLog: [{ timestamp: new Date().toISOString(), action: 'Project Initialized', user: 'Operator' }]
+      });
+    }, 1000);
   };
 
-  const renderIcon = (iconName: string) => {
-    switch (iconName) {
-      case 'Home': return <Home size={18} />;
-      case 'Building': return <Building size={18} />;
-      case 'Factory': return <Factory size={18} />;
-      default: return <Building2 size={18} />;
-    }
+  const toggleService = (service: 'boq' | 'bim') => {
+    setServices(prev => ({ ...prev, [service]: !prev[service] }));
   };
 
   return (
-    <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/80 backdrop-blur-xl p-4 animate-in fade-in zoom-in duration-300">
-      <div className="bg-slate-900 border border-slate-700 w-full max-w-xl rounded-[2rem] overflow-hidden shadow-2xl relative">
-        <div className="absolute top-0 right-0 p-8 opacity-5">
-          <Building2 size={120} />
-        </div>
+    <div className="fixed inset-0 z-[150] flex items-center justify-center bg-slate-950/80 backdrop-blur-xl p-4 animate-in fade-in zoom-in-95 duration-300">
+      <div className="bg-white dark:bg-slate-900 border border-zinc-200 dark:border-slate-800 w-full max-w-2xl rounded-[3rem] overflow-hidden shadow-2xl relative">
         
-        <div className="p-8 border-b border-slate-800 bg-gradient-to-r from-blue-600/10 to-indigo-600/10 flex justify-between items-center">
+        <div className="p-10 border-b border-zinc-100 dark:border-slate-800 bg-zinc-50/50 dark:bg-slate-800/20 flex justify-between items-center">
           <div>
-            <div className="flex items-center gap-2 mb-1">
-              <Crown className="text-yellow-400" size={18} />
-              <h3 className="text-xl font-black text-white uppercase italic">Premium Project Setup</h3>
-            </div>
-            <p className="text-xs text-slate-500 font-bold uppercase tracking-widest">ConstructAI Neural Instance</p>
+            <h3 className="text-2xl font-black text-slate-900 dark:text-white uppercase italic tracking-tighter">Initialize Project</h3>
+            <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-1">Define Scope & Neural Services</p>
           </div>
-          <button onClick={onClose} className="p-2 hover:bg-slate-800 rounded-full text-slate-400 transition-colors">
-            <X size={20} />
+          <button onClick={onClose} className="p-3 hover:bg-zinc-200 dark:hover:bg-slate-800 rounded-full text-slate-400 transition-colors">
+            <X size={24} />
           </button>
         </div>
 
-        <div className="p-8 space-y-6 overflow-y-auto max-h-[70vh] scrollbar-hide">
+        <div className="p-10 space-y-8 overflow-y-auto max-h-[70vh] custom-scrollbar">
+          {/* Section 1: Name */}
           <div className="space-y-3">
-            <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-1">Project Identifier</label>
-            <div className="relative">
-              <Building2 className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={18}/>
-              <input 
-                required
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="e.g. Skyline Residency Phase I"
-                className="w-full bg-slate-950 border border-slate-800 rounded-2xl py-4 pl-12 pr-4 text-sm focus:ring-2 focus:ring-blue-500 outline-none text-white transition-all"
-              />
+            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Project Identifier</label>
+            <input 
+              autoFocus
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="e.g. Terminal 3 Expansion"
+              className="w-full bg-zinc-100 dark:bg-slate-950 border border-zinc-200 dark:border-slate-800 rounded-2xl py-5 px-6 text-base font-bold text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-cyan-500/50 transition-all"
+            />
+          </div>
+
+          {/* Section 2: Services */}
+          <div className="space-y-4">
+            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Neural Services Selection</label>
+            <div className="grid grid-cols-2 gap-4">
+              <button 
+                onClick={() => toggleService('boq')}
+                className={`p-6 rounded-[2rem] border transition-all text-left flex flex-col gap-4 ${services.boq ? 'bg-cyan-500/10 border-cyan-500' : 'bg-zinc-50 dark:bg-slate-950 border-zinc-200 dark:border-slate-800 opacity-60'}`}
+              >
+                <div className={`p-3 rounded-xl w-fit ${services.boq ? 'bg-cyan-500 text-white' : 'bg-slate-800 text-slate-500'}`}>
+                  <Calculator size={24} />
+                </div>
+                <div>
+                  <h4 className="font-black text-sm uppercase italic">2D to BOQ</h4>
+                  <p className="text-[10px] text-slate-500 font-medium leading-tight mt-1">Automated IS-1200 quantity extraction from plans.</p>
+                </div>
+              </button>
+
+              <button 
+                onClick={() => toggleService('bim')}
+                className={`p-6 rounded-[2rem] border transition-all text-left flex flex-col gap-4 ${services.bim ? 'bg-indigo-500/10 border-indigo-500' : 'bg-zinc-50 dark:bg-slate-950 border-zinc-200 dark:border-slate-800 opacity-60'}`}
+              >
+                <div className={`p-3 rounded-xl w-fit ${services.bim ? 'bg-indigo-500 text-white' : 'bg-slate-800 text-slate-500'}`}>
+                  <Box size={24} />
+                </div>
+                <div>
+                  <h4 className="font-black text-sm uppercase italic">2D to BIM</h4>
+                  <p className="text-[10px] text-slate-500 font-medium leading-tight mt-1">Synthesize 3D Digital Twins from 2D blueprints.</p>
+                </div>
+              </button>
             </div>
           </div>
 
-          <div className="space-y-3">
-            <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-1">Project Template</label>
-            <div className="grid grid-cols-1 gap-2">
-              {PROJECT_TEMPLATES.map((tpl) => (
-                <button
-                  key={tpl.id}
-                  onClick={() => setSelectedTemplate(tpl.id)}
-                  className={`flex items-start gap-4 p-4 rounded-2xl border transition-all text-left ${
-                    selectedTemplate === tpl.id 
-                    ? 'bg-blue-600/10 border-blue-500/50 ring-1 ring-blue-500/30' 
-                    : 'bg-slate-950 border-slate-800 hover:border-slate-700'
-                  }`}
+          {/* Section 3: Template (Optional) */}
+          <div className="space-y-4">
+            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Structure Type</label>
+            <div className="flex flex-wrap gap-2">
+              {['Residential', 'Commercial', 'Industrial', 'Infrastructure'].map(tpl => (
+                <button 
+                  key={tpl}
+                  onClick={() => setSelectedTemplate(tpl)}
+                  className={`px-6 py-3 rounded-full text-[10px] font-black uppercase tracking-widest border transition-all ${selectedTemplate === tpl ? 'bg-slate-900 dark:bg-white text-white dark:text-slate-900 border-transparent' : 'bg-transparent border-zinc-200 dark:border-slate-800 text-slate-500'}`}
                 >
-                  <div className={`p-3 rounded-xl ${selectedTemplate === tpl.id ? 'bg-blue-600 text-white' : 'bg-slate-800 text-slate-400'}`}>
-                    {renderIcon(tpl.icon)}
-                  </div>
-                  <div className="flex-1">
-                    <h4 className={`text-xs font-black uppercase tracking-tight ${selectedTemplate === tpl.id ? 'text-blue-400' : 'text-white'}`}>
-                      {tpl.name}
-                    </h4>
-                    <p className="text-[10px] text-slate-500 font-medium leading-relaxed mt-1">
-                      {tpl.description}
-                    </p>
-                  </div>
+                  {tpl}
                 </button>
               ))}
             </div>
           </div>
+        </div>
 
-          <div className="space-y-4">
-            <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest px-1">Collaborative Workforce</label>
-            <div className="flex gap-2">
-              <div className="relative flex-1">
-                <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={18}/>
-                <input 
-                  type="email"
-                  value={teamEmail}
-                  onChange={(e) => setTeamEmail(e.target.value)}
-                  onKeyPress={(e) => e.key === 'Enter' && addMember()}
-                  placeholder="Invite by email id..."
-                  className="w-full bg-slate-950 border border-slate-800 rounded-2xl py-4 pl-12 pr-4 text-sm focus:ring-2 focus:ring-blue-500 outline-none text-white transition-all"
-                />
-              </div>
-              <button 
-                onClick={addMember}
-                className="bg-slate-800 hover:bg-slate-700 text-white p-4 rounded-2xl border border-slate-700 transition-all active:scale-95"
-              >
-                <Plus size={20} />
-              </button>
-            </div>
-
-            <div className="flex flex-wrap gap-2">
-              {teamMembers.map((email) => (
-                <div key={email} className="bg-blue-500/10 border border-blue-500/20 text-blue-400 px-3 py-1.5 rounded-full text-[10px] font-bold flex items-center gap-2 group animate-in fade-in slide-in-from-left-2">
-                  {email}
-                  <button onClick={() => removeMember(email)} className="hover:text-red-400"><X size={12} /></button>
-                </div>
-              ))}
-              {teamMembers.length === 0 && <span className="text-[10px] text-slate-600 italic">Invite teams to share live monitoring.</span>}
-            </div>
-          </div>
-
-          <div className="pt-4 sticky bottom-0 bg-slate-900 pb-2">
-            <button 
-              onClick={handleCreate}
-              disabled={isCreating || !name}
-              className="w-full bg-gradient-to-r from-blue-600 to-indigo-700 hover:from-blue-500 hover:to-indigo-600 text-white py-5 rounded-[1.5rem] font-black uppercase tracking-widest shadow-2xl shadow-blue-600/30 transition-all active:scale-95 disabled:opacity-50 flex items-center justify-center gap-3 italic"
-            >
-              {isCreating ? (
-                <>
-                  <Zap className="animate-spin" size={20} />
-                  Initializing Neural Twin...
-                </>
-              ) : (
-                <>
-                  <CheckCircle2 size={20} />
-                  Launch Monitoring App
-                </>
-              )}
-            </button>
-          </div>
+        <div className="p-10 border-t border-zinc-100 dark:border-slate-800 flex justify-end">
+          <button 
+            onClick={handleCreate}
+            disabled={!isFormValid || isCreating}
+            className="px-12 py-5 bg-cyan-600 hover:bg-cyan-500 text-white rounded-[2rem] font-black uppercase tracking-widest shadow-2xl transition-all active:scale-95 disabled:opacity-30 flex items-center gap-3 italic"
+          >
+            {isCreating ? <Loader2 className="animate-spin" size={20} /> : <Zap size={20} className="fill-white" />}
+            Initialize Project Hub
+            {!isCreating && <ArrowRight size={20} />}
+          </button>
         </div>
       </div>
     </div>

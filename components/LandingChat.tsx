@@ -4,10 +4,12 @@ import {
   Send, Bot, User, Building2, Waves, Milestone, FlaskConical, 
   Sparkles, Globe, Moon, Sun, ArrowRight, MessageSquare,
   Box, Calculator, Video, ShieldCheck, Plus, Mic, Loader2,
-  LayoutDashboard, HardDrive, Briefcase, FileText, Layers, ChevronRight, Zap
+  LayoutDashboard, HardDrive, Briefcase, FileText, Layers, ChevronRight, Zap, CheckCircle2,
+  FileSpreadsheet, Move3d, Download
 } from 'lucide-react';
 import { getRegulatoryAdvice } from '../services/geminiService';
-import { ThemeContext } from '../App';
+import { saveChatHistory } from '../services/dbService';
+import { ThemeContext, ConnectionContext } from '../App';
 import BimSynthesisView from './BimSynthesisView';
 
 interface Message { 
@@ -31,12 +33,14 @@ interface LandingChatProps {
   onOpenBoqDashboard: () => void;
   onOpenBoqExtractor: () => void;
   user: any;
+  isCodeAppLinked?: boolean;
   children?: React.ReactNode;
 }
 
-const LandingChat: React.FC<LandingChatProps> = ({ onAuthRequired, onEnterApp, onOpenBoqDashboard, onOpenBoqExtractor, user, children }) => {
+const LandingChat: React.FC<LandingChatProps> = ({ onAuthRequired, onEnterApp, onOpenBoqDashboard, onOpenBoqExtractor, user, isCodeAppLinked, children }) => {
   const { isDark, toggleTheme } = useContext(ThemeContext);
   const [messages, setMessages] = useState<Message[]>([]);
+  const [chatId, setChatId] = useState<string | undefined>(undefined);
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const [showBimSynthesis, setShowBimSynthesis] = useState(false);
@@ -57,11 +61,21 @@ const LandingChat: React.FC<LandingChatProps> = ({ onAuthRequired, onEnterApp, o
     const userMsg = finalInput;
     setInput('');
     setIsTyping(true);
-    setMessages(prev => [...prev, { role: 'user', content: userMsg }]);
+    
+    const newMessages: Message[] = [...messages, { role: 'user', content: userMsg }];
+    setMessages(newMessages);
 
     try {
-      const responseText = await getRegulatoryAdvice(userMsg);
-      setMessages(prev => [...prev, { role: 'assistant', content: responseText }]);
+      const responseText = await getRegulatoryAdvice(userMsg, isCodeAppLinked);
+      const assistantMsg: Message = { role: 'assistant', content: responseText };
+      const updatedMessages: Message[] = [...newMessages, assistantMsg];
+      setMessages(updatedMessages);
+
+      // Persist to Supabase if logged in
+      if (user) {
+        const savedChat = await saveChatHistory(user.id, updatedMessages, chatId);
+        if (savedChat?.id) setChatId(savedChat.id);
+      }
     } catch (error) {
       setMessages(prev => [...prev, { role: 'assistant', content: "Neural link lost. Re-establishing connection..." }]);
     } finally {
@@ -99,15 +113,23 @@ const LandingChat: React.FC<LandingChatProps> = ({ onAuthRequired, onEnterApp, o
           <div className="max-w-4xl mx-auto space-y-12 animate-in fade-in slide-in-from-left-6 duration-1000">
             
             <header className="space-y-6">
-              <div className="inline-flex items-center gap-2 px-4 py-2 bg-cyan-500/10 border border-cyan-500/20 rounded-full text-cyan-500">
-                <Sparkles size={14} />
-                <span className="text-[10px] font-black uppercase tracking-[0.2em]">Next-Gen Site Intelligence</span>
+              <div className="flex items-center gap-3">
+                <div className="inline-flex items-center gap-2 px-4 py-2 bg-cyan-500/10 border border-cyan-500/20 rounded-full text-cyan-500">
+                  <Sparkles size={14} />
+                  <span className="text-[10px] font-black uppercase tracking-[0.2em]">Next-Gen Site Intelligence</span>
+                </div>
+                {isCodeAppLinked && (
+                  <div className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-500/10 border border-emerald-500/20 rounded-full text-emerald-500 animate-in zoom-in duration-300">
+                    <CheckCircle2 size={14} />
+                    <span className="text-[10px] font-black uppercase tracking-[0.2em]">Regulatory Link: Active</span>
+                  </div>
+                )}
               </div>
               <h1 className="text-5xl md:text-7xl font-black text-slate-900 dark:text-white leading-[0.95] uppercase italic tracking-tighter">
-                Unified <span className="text-cyan-500">Monitoring</span> & Operations.
+                AI Platform for <span className="text-cyan-500">BOQ, BIM</span> & Monitoring
               </h1>
               <p className="text-lg text-slate-500 dark:text-slate-400 max-w-xl font-medium leading-relaxed italic">
-                Bridging the gap between 2D plans, BIM design, and real-time site reality with Weautomates Vision AI.
+                Generate BOQs from 2D drawings, convert plans into BIM models, and monitor real-time construction progress — all in one AI-powered platform.
               </p>
               
               <div className="flex flex-wrap gap-4 pt-4">
@@ -127,7 +149,6 @@ const LandingChat: React.FC<LandingChatProps> = ({ onAuthRequired, onEnterApp, o
             </header>
 
             <section className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* Feature: 2D TO BIM */}
               <div 
                 onClick={() => setShowBimSynthesis(true)}
                 className="group p-8 bg-white dark:bg-slate-900 border border-zinc-200 dark:border-white/5 rounded-[3rem] shadow-xl hover:border-cyan-500 transition-all cursor-pointer relative overflow-hidden"
@@ -137,15 +158,18 @@ const LandingChat: React.FC<LandingChatProps> = ({ onAuthRequired, onEnterApp, o
                   <div className="w-14 h-14 bg-cyan-500/10 rounded-2xl flex items-center justify-center text-cyan-500 mb-6 group-hover:scale-110 transition-transform">
                     <Box size={28} />
                   </div>
-                  <h3 className="text-xl font-black text-slate-900 dark:text-white uppercase italic tracking-tight">2D to BIM Model</h3>
-                  <p className="text-xs text-slate-500 font-bold uppercase tracking-widest mt-2">Neural 3D Reconstruction</p>
-                  <div className="mt-8 flex items-center text-[10px] font-black text-cyan-500 uppercase tracking-[0.2em] group-hover:translate-x-2 transition-transform">
-                    Initialize Engine <ChevronRight size={14} className="ml-1" />
+                  <h3 className="text-xl font-black text-slate-900 dark:text-white uppercase italic tracking-tight leading-tight">2D → BIM <span className="text-cyan-500">Conversion</span></h3>
+                  <p className="text-xs text-slate-500 font-medium leading-relaxed mt-2 italic">
+                    Convert 2D drawings into accurate BIM models with AI assistance.
+                  </p>
+                  <div className="mt-6 flex items-center gap-2">
+                    <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-cyan-500/10 border border-cyan-500/20 rounded-full text-[9px] font-black text-cyan-500 uppercase tracking-widest">
+                      <Move3d size={10} /> View BIM Model
+                    </div>
                   </div>
                 </div>
               </div>
 
-              {/* Feature: 2D TO BOQ */}
               <div 
                 onClick={onOpenBoqExtractor}
                 className="group p-8 bg-white dark:bg-slate-900 border border-zinc-200 dark:border-white/5 rounded-[3rem] shadow-xl hover:border-amber-500 transition-all cursor-pointer relative overflow-hidden"
@@ -155,10 +179,14 @@ const LandingChat: React.FC<LandingChatProps> = ({ onAuthRequired, onEnterApp, o
                   <div className="w-14 h-14 bg-amber-500/10 rounded-2xl flex items-center justify-center text-amber-500 mb-6 group-hover:scale-110 transition-transform">
                     <Calculator size={28} />
                   </div>
-                  <h3 className="text-xl font-black text-slate-900 dark:text-white uppercase italic tracking-tight">2D to BOQ Extraction</h3>
-                  <p className="text-xs text-slate-500 font-bold uppercase tracking-widest mt-2">IS-1200 Material Audit</p>
-                  <div className="mt-8 flex items-center text-[10px] font-black text-amber-500 uppercase tracking-[0.2em] group-hover:translate-x-2 transition-transform">
-                    Run Analysis <ChevronRight size={14} className="ml-1" />
+                  <h3 className="text-xl font-black text-slate-900 dark:text-white uppercase italic tracking-tight leading-tight">AI BOQ from <span className="text-amber-500">2D Plans</span></h3>
+                  <p className="text-xs text-slate-500 font-medium leading-relaxed mt-2 italic">
+                    Auto-generate Excel-ready BOQs with quantities & takeoffs in minutes.
+                  </p>
+                  <div className="mt-6 flex items-center gap-2">
+                    <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-amber-500/10 border border-amber-500/20 rounded-full text-[9px] font-black text-amber-500 uppercase tracking-widest">
+                      <FileSpreadsheet size={10} /> Download Excel
+                    </div>
                   </div>
                 </div>
               </div>
@@ -189,8 +217,10 @@ const LandingChat: React.FC<LandingChatProps> = ({ onAuthRequired, onEnterApp, o
                       <div>
                         <h4 className="text-xs font-black text-slate-900 dark:text-white uppercase tracking-tight">IS-Code Expert</h4>
                         <div className="flex items-center gap-1.5">
-                          <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"></span>
-                          <span className="text-[9px] text-slate-400 font-bold uppercase">Online Guidance</span>
+                          <span className={`w-1.5 h-1.5 rounded-full animate-pulse ${isCodeAppLinked ? 'bg-emerald-500' : 'bg-amber-500'}`}></span>
+                          <span className="text-[9px] text-slate-400 font-black uppercase tracking-widest">
+                            {isCodeAppLinked ? 'IS-CODE APP SYNCED' : 'ADVISORY MODE'}
+                          </span>
                         </div>
                       </div>
                    </div>
@@ -201,7 +231,11 @@ const LandingChat: React.FC<LandingChatProps> = ({ onAuthRequired, onEnterApp, o
                     {messages.length === 0 && (
                       <div className="h-full flex flex-col items-center justify-center text-center px-4 space-y-6 opacity-40">
                          <MessageSquare size={48} className="text-slate-400" />
-                         <p className="text-sm font-medium italic">"Ask me about IS-456 standards, concrete curing, or safety compliance on GIFT City projects."</p>
+                         <p className="text-sm font-medium italic">
+                           {isCodeAppLinked 
+                             ? "Neural link to IS-Code database active. I can now provide specific clauses and compliance audits for your project."
+                             : "Ask me about IS-456 standards, concrete curing, or safety compliance on GIFT City projects."}
+                         </p>
                       </div>
                     )}
                     {messages.map((m, i) => (
@@ -241,7 +275,7 @@ const LandingChat: React.FC<LandingChatProps> = ({ onAuthRequired, onEnterApp, o
                         <input 
                             value={input}
                             onChange={(e) => setInput(e.target.value)}
-                            placeholder="Type a query..."
+                            placeholder="Type a regulatory query..."
                             className="w-full bg-zinc-100 dark:bg-slate-800 border border-zinc-200 dark:border-white/10 rounded-2xl pl-4 pr-12 py-3.5 text-[12px] text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-cyan-500/30 transition-all"
                         />
                         <button 

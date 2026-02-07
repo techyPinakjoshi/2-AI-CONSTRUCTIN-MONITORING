@@ -8,86 +8,256 @@ const getAiClient = () => {
   return new GoogleGenAI({ apiKey });
 };
 
-const fileToDataPart = async (file: File) => {
-  return new Promise((resolve) => {
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      const base64Data = (reader.result as string).split(',')[1];
-      resolve({
-        inlineData: {
-          data: base64Data,
-          mimeType: file.type || 'image/jpeg'
-        }
-      });
-    };
-    reader.readAsDataURL(file);
-  });
+/**
+ * Generates a Daily WIP Report based on site evidence and remarks.
+ * Follows strict reporting logic: no assumptions, no invented data.
+ */
+export const generateDailyReport = async (reportData: {
+  project: any;
+  date: string;
+  approvedMedia: any[];
+  activeMachinery: any[];
+  weather?: string;
+  manpower?: any;
+}) => {
+  const ai = getAiClient();
+  if (!ai) return "AI services are currently offline. Please check your API configuration.";
+
+  const systemInstruction = `
+    You are a Construction Site Reporting AI specialized in generating Daily Work-in-Progress (WIP) reports for construction projects.
+
+    Your role:
+    - Assist site engineers and project managers in documenting daily progress
+    - Ensure reports are factual, measurable, and BOQ-linked
+    - Never assume quantities or activities
+    - Never invent work that was not explicitly provided
+
+    Core Principles:
+    - Accuracy over completeness
+    - No assumptions
+    - No estimated quantities
+    - No generic statements like “work in progress”
+    - All reported work must be measurable and traceable
+
+    REPORT STRUCTURE (MANDATORY):
+    1. PROJECT INFORMATION
+    2. WORK EXECUTED TODAY (Table: Sr No, Description, Location/Grid, Unit, Qty Today, BOQ Ref)
+    3. MANPOWER DEPLOYED
+    4. MACHINERY & EQUIPMENT USED
+    5. MATERIAL RECEIPT / CONSUMPTION
+    6. QUALITY & INSPECTION STATUS
+    7. SAFETY OBSERVATIONS
+    8. ISSUES / CLARIFICATIONS / DELAYS
+    9. WORK PLANNED FOR NEXT DAY
+    10. SITE PHOTOS (REFERENCE ONLY)
+    11. SIGN-OFF
+
+    STRICT RULES:
+    - Never invent quantities.
+    - If input is missing, leave blank or mark "Not reported today".
+  `;
+
+  const prompt = `
+    Generate a professional Daily WIP Report for ${reportData.date}.
+    
+    DATA INPUTS:
+    - Project: ${reportData.project.name}
+    - Location: ${reportData.project.location || 'Site Location'}
+    - Approved Site Captures & Remarks: ${JSON.stringify(reportData.approvedMedia)}
+    - Active Machinery Status: ${JSON.stringify(reportData.activeMachinery)}
+    - Weather: ${reportData.weather || 'Clear'}
+    
+    Follow the mandatory report structure strictly.
+  `;
+
+  try {
+    const response = await ai.models.generateContent({
+      model: 'gemini-3-flash-preview',
+      contents: prompt,
+      config: { systemInstruction }
+    });
+    return response.text || "Report generation failed to return content.";
+  } catch (error) {
+    console.error("Report Generation Error:", error);
+    return "Error generating neural report. Please verify data inputs and try again.";
+  }
 };
 
 /**
- * Extracts a high-accuracy BOQ from construction plans.
- * Focuses on material counts (Bags, Kg, Nos) derived from 2D geometry.
+ * Fetches regulatory advice with optional external app context (e.g., IS-Code App).
+ */
+export const getRegulatoryAdvice = async (query: string, isCodeAppLinked: boolean = false) => {
+  const ai = getAiClient();
+  if (!ai) return "Offline Advice: System is currently disconnected from the regulatory cloud.";
+
+  const systemInstruction = isCodeAppLinked 
+    ? "You are a Senior IS-Code Compliance Officer. The user's account is LINKED to the Indian Construction Code App. Always reference specific IS Codes (IS 456, IS 1200, IS 800, NBC 2016) in your response. Be concise, technical, and provide safety margins."
+    : "You are a Construction AI Consultant. Provide general engineering guidance based on international standards.";
+
+  try {
+    const response = await ai.models.generateContent({
+      model: 'gemini-3-flash-preview',
+      contents: query,
+      config: { systemInstruction }
+    });
+    return response.text || "No guidance returned from neural core.";
+  } catch (error) {
+    return "Connection error. Unable to reach IS-Code regulatory database.";
+  }
+};
+
+/**
+ * Reconstructs 3D BIM metadata from 2D plan images/PDFs.
+ */
+export const reconstructBimFromPlans = async (files: File[]) => {
+  const ai = getAiClient();
+  if (!ai) return { estimatedLod: 100, levels: 1, elements: [] };
+
+  const parts: any[] = [{ text: "Analyze these 2D plans and reconstruct a 3D BIM model metadata. Identify levels, estimated LOD, and core structural elements." }];
+  
+  for (const file of files) {
+    const reader = new FileReader();
+    const base64 = await new Promise<string>((resolve) => {
+      reader.onloadend = () => resolve((reader.result as string).split(',')[1]);
+      reader.readAsDataURL(file);
+    });
+    parts.push({ 
+      inlineData: { 
+        data: base64, 
+        mimeType: file.type.startsWith('image/') ? file.type : 'application/pdf' 
+      } 
+    });
+  }
+
+  try {
+    const response = await ai.models.generateContent({
+      model: 'gemini-3-pro-preview',
+      contents: { parts },
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            estimatedLod: { type: Type.NUMBER },
+            levels: { type: Type.NUMBER },
+            elements: {
+              type: Type.ARRAY,
+              items: {
+                type: Type.OBJECT,
+                properties: {
+                  type: { type: Type.STRING },
+                  count: { type: Type.NUMBER }
+                }
+              }
+            }
+          }
+        }
+      }
+    });
+    return JSON.parse(response.text || '{}');
+  } catch (error) {
+    console.error("BIM Reconstruction Error:", error);
+    return { estimatedLod: 100, levels: 1, elements: [] };
+  }
+};
+
+/**
+ * Audits a delivery invoice against current stock summary.
+ */
+export const auditInventoryInvoice = async (invoiceText: string, stockSummary: string) => {
+  const ai = getAiClient();
+  if (!ai) return { discrepancies: false, message: "Offline: Neural Link Severed" };
+
+  try {
+    const response = await ai.models.generateContent({
+      model: 'gemini-3-flash-preview',
+      contents: `Audit this invoice manifest against current site stock.
+      Invoice: "${invoiceText}"
+      Current Stock: "${stockSummary}"`,
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            discrepancies: { type: Type.BOOLEAN },
+            message: { type: Type.STRING },
+            detectedItems: {
+              type: Type.ARRAY,
+              items: {
+                type: Type.OBJECT,
+                properties: {
+                  name: { type: Type.STRING },
+                  quantity: { type: Type.NUMBER }
+                }
+              }
+            }
+          }
+        }
+      }
+    });
+    return JSON.parse(response.text || '{}');
+  } catch (error) {
+    return { discrepancies: false, message: "Audit logic failure." };
+  }
+};
+
+/**
+ * Extracts Bill of Quantities from 2D drawings with strict Quantity Surveyor logic.
  */
 export const extractBoqFromPlans = async (files: File[], chatHistory: any[] = []) => {
   try {
     const ai = getAiClient();
-    
-    if (!ai) {
-      console.warn("Using simulated Quantities (API_KEY not found)");
-      return {
-        boqItems: [
-          { id: "Q-1", code: "CIV-01", category: "Civil Works", description: "OPC 53 Grade Cement requirement for Foundation", qty: 450, unit: "bags", confidence: 0.92, reasoning: "Derived from 65cum Concrete at 7 bags/cum" },
-          { id: "Q-2", code: "STR-02", category: "Structural Steel", description: "Fe500D TMT Reinforcement Bars (8mm to 25mm)", qty: 5.2, unit: "tons", confidence: 0.85, reasoning: "Estimated at 80kg/cum for structural framework" },
-          { id: "Q-3", code: "MAS-03", category: "Masonry", description: "Red Bricks (9x4x3) for internal 4.5\" walls", qty: 12500, unit: "nos", confidence: 0.78, reasoning: "Calculated from 1250sqft wall area minus openings" }
-        ],
-        clarificationQuestions: [
-          "Slab thickness is not annotated. Should I assume 125mm or 150mm?",
-          "Wall height for masonry is missing. Please provide floor-to-ceiling height."
-        ]
-      };
-    }
+    if (!ai) return { boqItems: [], clarifications: [] };
 
     const systemInstruction = `
-      You are a specialized Construction Material Auditor and Quantity Surveyor. 
-      Your task is to convert 2D architectural and structural drawings into a granular Bill of Quantities.
+      You are a licensed Quantity Surveyor AI specialized in manual BOQ extraction from 2D construction drawings.
       
-      CORE INSTRUCTIONS:
-      1. DETECT MATERIALS: Scan for all materials required for a building (Cement, Sand, Aggregate, Steel, Bricks, Tiles, Paint, Plumbing lengths).
-      2. DERIVE QUANTITIES: 
-         - Concrete: Calculate volume from slab/beam areas x typical thickness.
-         - Cement: Derived from Concrete (7-8 bags per cum).
-         - Steel: Estimate Tonnage based on area if BBS is not present (standard 80kg/cum for slabs/beams).
-         - Masonry: Calculate wall area and convert to Number of Bricks/Blocks.
-      3. ACCURACY & AMBIGUITY: 
-         - If dimensions are missing (e.g. wall height, slab thickness), DO NOT guess. 
-         - List these missing data points in 'clarificationQuestions'.
-         - State the logic for every calculation in the 'reasoning' field.
+      OPERATING PRINCIPLES:
+      ❌ No assumptions | ❌ No inferred dimensions | ❌ No default industry values | ❌ No estimation without drawing evidence
+      ✅ Quantities ONLY from visible, labeled, dimensioned data
+      ✅ Missing or ambiguous data → send to Clarification Console
+      ✅ Follow IS 1200 methodology strictly.
+
+      EXTRACTION WORKFLOW:
+      1. Verify drawing metadata (Scale, Level, Type).
+      2. Extract from Bottom to Top (Foundation -> RCC -> Masonry -> Finishing).
+      3. Handle user requests from chat history to add or remove particulars from the existing BOQ.
       
-      OUTPUT:
-      Return ONLY a JSON object containing 'boqItems' and 'clarificationQuestions'.
-      No pricing. No monetary values.
+      OUTPUT REQUIREMENTS:
+      - JSON format only.
+      - Return "boqItems" and "clarifications".
+      - "boqItems" must include: itemNo, description, unit, calculation, quantity, drawingRef, status (Complete, Pending Clarification, Partial).
+      - "clarifications" must include: id, item, missingInfo, drawingRef, impact.
     `;
 
-    const parts: any[] = [
-      { text: "Exhaustively map all materials from these plans. Calculate quantities based on visible scale and annotations. Ask me for missing Z-axis dimensions (heights/thickness)." }
-    ];
+    const parts: any[] = [{ text: "Extract IS-1200 compliant BOQ from these drawings based on your strict operating principles. Also consider the following conversation for adjustments to the BOQ." }];
     
+    // Add chat history context
     if (chatHistory.length > 0) {
-      parts.push({ text: `Refine mapping using this user context: ${JSON.stringify(chatHistory)}` });
+      parts.push({ text: `CHAT HISTORY CONTEXT: ${JSON.stringify(chatHistory)}` });
     }
 
     for (const file of files) {
-      if (file.type.startsWith('image/')) {
-        const imagePart = await fileToDataPart(file);
-        parts.push(imagePart);
+      if (file.type.startsWith('image/') || file.type === 'application/pdf') {
+        const reader = new FileReader();
+        const base64 = await new Promise<string>(r => {
+          reader.onloadend = () => r((reader.result as string).split(',')[1]);
+          reader.readAsDataURL(file);
+        });
+        parts.push({ 
+          inlineData: { 
+            data: base64, 
+            mimeType: file.type.startsWith('image/') ? file.type : 'application/pdf' 
+          } 
+        });
       }
     }
 
     const result = await ai.models.generateContent({
       model: 'gemini-3-pro-preview',
       contents: { parts },
-      config: {
-        systemInstruction,
+      config: { 
+        systemInstruction, 
         responseMimeType: "application/json",
         responseSchema: {
           type: Type.OBJECT,
@@ -97,83 +267,71 @@ export const extractBoqFromPlans = async (files: File[], chatHistory: any[] = []
               items: {
                 type: Type.OBJECT,
                 properties: {
-                  id: { type: Type.STRING },
-                  code: { type: Type.STRING },
-                  category: { type: Type.STRING },
+                  itemNo: { type: Type.STRING },
                   description: { type: Type.STRING },
-                  qty: { type: Type.NUMBER },
                   unit: { type: Type.STRING },
-                  confidence: { type: Type.NUMBER },
-                  reasoning: { type: Type.STRING }
-                },
-                required: ["id", "code", "category", "description", "qty", "unit", "reasoning"]
+                  calculation: { type: Type.STRING },
+                  quantity: { type: Type.NUMBER },
+                  drawingRef: { type: Type.STRING },
+                  status: { type: Type.STRING }
+                }
               }
             },
-            clarificationQuestions: {
+            clarifications: {
               type: Type.ARRAY,
-              items: { type: Type.STRING }
+              items: {
+                type: Type.OBJECT,
+                properties: {
+                  id: { type: Type.STRING },
+                  item: { type: Type.STRING },
+                  missingInfo: { type: Type.STRING },
+                  drawingRef: { type: Type.STRING },
+                  impact: { type: Type.STRING }
+                }
+              }
             }
-          },
-          required: ["boqItems", "clarificationQuestions"]
-        },
+          }
+        }
       }
     });
 
-    return JSON.parse(result.text || '{"boqItems": [], "clarificationQuestions": []}');
+    return JSON.parse(result.text || '{"boqItems": [], "clarifications": []}');
   } catch (error) {
-    console.error("BOQ Extraction error:", error);
-    return { boqItems: [], clarificationQuestions: ["Critical error in vision mapping. Please re-upload clearer plans."] };
+    console.error("BOQ Extraction Error:", error);
+    return { boqItems: [], clarifications: [{ id: "ERR-1", item: "System", missingInfo: "Neural Mapping failed. API Timeout or Invalid Key.", drawingRef: "N/A", impact: "Total Block" }] };
   }
 };
 
 /**
- * Reconstructs a 3D BIM model from 2D plans.
+ * Analyzes a site frame image for progress and compliance.
  */
-export const reconstructBimFromPlans = async (files: File[]) => {
-  try {
-    const ai = getAiClient();
-    if (!ai) return { elements: [], levels: 0, isCodeCompliant: true, estimatedLod: 350 };
-    const parts: any[] = [{ text: "Analyze plans for BIM reconstruction." }];
-    for (const file of files) if (file.type.startsWith('image/')) parts.push(await fileToDataPart(file));
-    const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
-      contents: { parts },
-      config: { responseMimeType: "application/json" }
-    });
-    return JSON.parse(response.text || '{}');
-  } catch (error) {
-    return { elements: [], levels: 0, isCodeCompliant: false, estimatedLod: 0 };
-  }
-};
-
 export const analyzeSiteFrame = async (imageData: string, stage: ProjectStage, cameraName: string) => {
   const ai = getAiClient();
   if (!ai) return { visualAudit: "Offline", progressPercentage: 0 };
-  const result = await ai.models.generateContent({
-    model: 'gemini-3-flash-preview',
-    contents: { parts: [{ text: `Analyze stage ${stage}` }, { inlineData: { mimeType: "image/jpeg", data: imageData.split(',')[1] } }] },
-    config: { responseMimeType: "application/json" }
-  });
-  return JSON.parse(result.text || '{}');
-};
-
-export const getRegulatoryAdvice = async (query: string) => {
-  const ai = getAiClient();
-  if (!ai) return "Offline Advice";
-  const response = await ai.models.generateContent({
-    model: 'gemini-3-flash-preview',
-    contents: query,
-  });
-  return response.text || "No guidance.";
-};
-
-export const auditInventoryInvoice = async (invoiceText: string, stockSummary: string) => {
-  const ai = getAiClient();
-  if (!ai) return { discrepancies: false, message: "Offline", detectedItems: [] };
-  const result = await ai.models.generateContent({
-    model: 'gemini-3-flash-preview',
-    contents: `Audit ${invoiceText} vs ${stockSummary}`,
-    config: { responseMimeType: "application/json" }
-  });
-  return JSON.parse(result.text || '{}');
+  
+  try {
+    const result = await ai.models.generateContent({
+      model: 'gemini-3-flash-preview',
+      contents: { 
+        parts: [
+          { text: `Analyze site frame for stage: ${stage}. Check for PPE compliance and IS-Code structural alignment.` }, 
+          { inlineData: { mimeType: "image/jpeg", data: imageData.split(',')[1] } }
+        ] 
+      },
+      config: { 
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            visualAudit: { type: Type.STRING },
+            progressPercentage: { type: Type.NUMBER },
+            complianceStatus: { type: Type.STRING }
+          }
+        }
+      }
+    });
+    return JSON.parse(result.text || '{}');
+  } catch (error) {
+    return { visualAudit: "Analysis Error", progressPercentage: 0 };
+  }
 };

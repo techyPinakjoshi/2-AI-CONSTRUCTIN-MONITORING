@@ -3,8 +3,6 @@ import { supabase } from './supabaseClient';
 import { AiLogEntry } from '../types';
 
 export const saveProjectData = async (userId: string, projectData: any) => {
-  console.log(`[DB] Upserting project for ${userId}`);
-  
   const { data, error } = await supabase
     .from('projects')
     .upsert({ 
@@ -39,4 +37,31 @@ export const logAiAnalysis = async (userId: string, projectId: string, log: AiLo
         ...log 
     });
     if (error) console.error("Logging error:", error);
+};
+
+export const saveChatHistory = async (userId: string, messages: any[], chatId?: string) => {
+  const payload = {
+    user_id: userId,
+    messages: messages,
+    updated_at: new Date().toISOString()
+  };
+
+  const { data, error } = await supabase
+    .from('chat_history')
+    .upsert(chatId ? { ...payload, id: chatId } : payload)
+    .select();
+
+  if (error) throw error;
+  return data[0];
+};
+
+export const fetchChatHistory = async (userId: string) => {
+  const { data, error } = await supabase
+    .from('chat_history')
+    .select('*')
+    .eq('user_id', userId)
+    .order('updated_at', { ascending: false });
+
+  if (error) return [];
+  return data;
 };

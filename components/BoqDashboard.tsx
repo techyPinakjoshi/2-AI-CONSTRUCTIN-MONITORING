@@ -1,132 +1,137 @@
 
-import React, { useState, useContext, useRef, ChangeEvent, useMemo } from 'react';
+import React, { useState, useContext, useRef, useEffect } from 'react';
 import { 
-  Calculator, X, Sun, Moon, FileUp, FileText, BarChart3, 
-  UploadCloud, Plus, Loader2, Sparkles, Download, ArrowRight,
-  LayoutDashboard, IndianRupee, ShieldCheck, Folder, HardDrive, 
-  Search, Filter, ChevronRight, File, MoreVertical, CheckCircle2,
-  Clock, AlertCircle, Briefcase, TrendingUp, Users, DollarSign,
-  Grid, List, Layers, Shield, FileSpreadsheet, UserCheck, ShieldAlert,
-  UserPlus, UserMinus, Key, Settings, MessageSquare, ClipboardCheck, Trello
+  Calculator, X, Sun, Moon, FileText, UploadCloud, Plus, Loader2, 
+  LayoutDashboard, ShieldCheck, Folder, HardDrive, ChevronRight, CheckCircle2,
+  Clock, AlertCircle, TrendingUp, Users, DollarSign, Share2, ShieldAlert,
+  ArrowRight, Activity, Zap, Shield, Search, Link2, Ruler, MessageSquare, 
+  History, GanttChart as GanttIcon, Database, Camera, Image as ImageIcon, 
+  Check, Trash2, CameraOff, Play, Eye, FileSpreadsheet, MoreVertical, 
+  Download, Settings, Fuel, Gauge, Construction, FileType, Printer, 
+  ArrowUpRight, ArrowDownLeft, FileOutput
 } from 'lucide-react';
 import { ThemeContext } from '../App';
-import { extractBoqFromPlans } from '../services/geminiService';
-import { MOCK_DOCUMENTS, MOCK_FOLDERS, MOCK_RFIS, MOCK_VENDORS, MOCK_CONTRACTS, MOCK_SUBMITTALS } from '../constants';
 import Tooltip from './Tooltip';
-import { UserRole, ProjectDocument, WorkflowType } from '../types';
+import { generateDailyReport } from '../services/geminiService';
 
-type DashboardTab = 'overview' | 'cde' | 'workflows' | 'procurement' | 'financials' | 'approvals' | 'team' | 'boq';
-type WorkflowView = 'board' | 'list';
+type DashboardTab = 'overview' | 'plans' | 'inventory' | 'timeline' | 'boq' | 'gallery' | 'reports';
 
-interface TeamMember {
+interface Task {
   id: string;
   name: string;
-  email: string;
-  role: UserRole;
-  status: 'ACTIVE' | 'INVITED';
-  joinedDate: string;
+  start: number;
+  end: number;
+  progress: number;
+  status: 'COMPLETED' | 'IN_PROGRESS' | 'REMAINING';
 }
 
-const ProjectSuite: React.FC<any> = ({ activeProject, onClose, onUpgrade }) => {
+interface Machine {
+  id: string;
+  name: string;
+  stage: string;
+  condition: 'ACTIVE' | 'IDLE' | 'NON-USE';
+  fuelCons: string;
+  health: string;
+}
+
+interface MaterialTransaction {
+  id: string;
+  name: string;
+  qty: number;
+  unit: string;
+  type: 'INWARD' | 'OUTWARD';
+  timestamp: string;
+}
+
+interface MediaRemark {
+  text: string;
+  timestamp: string;
+  author: string;
+  qty?: number;
+  unit?: string;
+}
+
+interface SiteMedia {
+  id: string;
+  url: string;
+  date: string;
+  status: 'PENDING' | 'APPROVED' | 'REJECTED';
+  user: string;
+  remarks: MediaRemark[];
+}
+
+interface DailyReport {
+  id: string;
+  date: string;
+  content: string;
+  status: 'DRAFT' | 'FINALIZED';
+}
+
+const ProjectDashboard: React.FC<any> = ({ activeProject, onClose, onCreateNew }) => {
   const { isDark, toggleTheme } = useContext(ThemeContext);
-  const [activeTab, setActiveTab] = useState<DashboardTab>('overview'); 
-  const [activeWorkflowType, setActiveWorkflowType] = useState<WorkflowType>('RFI');
-  const [workflowView, setWorkflowView] = useState<WorkflowView>('board');
-  const [userRole, setUserRole] = useState<UserRole>('CHECKER'); 
-  
-  // File Upload Logic
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const [isUploading, setIsUploading] = useState(false);
+  const [activeTab, setActiveTab] = useState<DashboardTab>('overview');
+  const [userRole, setUserRole] = useState<'MAKER' | 'CHECKER'>('MAKER');
 
-  // Use real data from activeProject if available
-  const docs = useMemo(() => {
-    if (activeProject?.documents && activeProject.documents.length > 0) {
-      return [...activeProject.documents, ...MOCK_DOCUMENTS];
-    }
-    return MOCK_DOCUMENTS;
-  }, [activeProject]);
+  // Dynamic State
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [machineries, setMachineries] = useState<Machine[]>([]);
+  const [inventory, setInventory] = useState<MaterialTransaction[]>([]);
+  const [media, setMedia] = useState<SiteMedia[]>([]);
+  const [boqItems, setBoqItems] = useState<any[]>([]);
+  const [reports, setReports] = useState<DailyReport[]>([]);
 
-  const boqData = useMemo(() => activeProject?.boq || [], [activeProject]);
-
-  const totalBoqValue = useMemo(() => {
-    return boqData.reduce((acc: number, curr: any) => acc + (curr.amount || 0), 0);
-  }, [boqData]);
-
-  const [team, setTeam] = useState<TeamMember[]>([
-    { id: 'u1', name: 'Arjun Sharma', email: 'arjun.s@lnt.com', role: 'CHECKER', status: 'ACTIVE', joinedDate: '2023-10-01' },
-    { id: 'u2', name: 'Rajesh K.', email: 'rajesh.k@contractor.in', role: 'MAKER', status: 'ACTIVE', joinedDate: '2023-11-15' },
-    { id: 'u3', name: 'Sita Verma', email: 'sita.v@arch.com', role: 'VIEWER', status: 'ACTIVE', joinedDate: '2023-11-20' },
-  ]);
-  
-  const [inviteEmail, setInviteEmail] = useState('');
-  const [inviteRole, setInviteRole] = useState<UserRole>('MAKER');
-
-  const totalBudget = MOCK_CONTRACTS.reduce((acc, c) => acc + c.value, 0) + totalBoqValue;
-
-  const handleApprove = (id: string) => {
-    // Local state management for approvals if needed
-  };
-
-  const triggerUpload = () => fileInputRef.current?.click();
-
-  const handleFileUpload = (e: ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setIsUploading(true);
-    setTimeout(() => {
-      // Logic handled in App.tsx via staged data if synced, 
-      // but here we just simulate for immediate feedback
-      setIsUploading(false);
-    }, 1500);
-  };
-
-  const handleAddTeamMember = () => {
-    if (!inviteEmail.trim()) return;
-    const newMember: TeamMember = {
-      id: `u-${Date.now()}`,
-      name: inviteEmail.split('@')[0],
-      email: inviteEmail,
-      role: inviteRole,
-      status: 'INVITED',
-      joinedDate: new Date().toISOString().split('T')[0]
-    };
-    setTeam(prev => [...prev, newMember]);
-    setInviteEmail('');
-  };
+  if (!activeProject) {
+    return (
+      <div className="fixed inset-0 z-[100] bg-zinc-50 dark:bg-slate-950 flex flex-col items-center justify-center p-8">
+        <div className="text-center space-y-8 animate-in zoom-in-95 duration-500">
+          <div className="p-10 bg-slate-900 dark:bg-white rounded-[3rem] shadow-2xl inline-block">
+            <Shield size={64} className="text-white dark:text-slate-900" />
+          </div>
+          <h2 className="text-4xl font-black text-slate-900 dark:text-white uppercase italic tracking-tighter">No Project Hub Active</h2>
+          <button onClick={onCreateNew} className="px-12 py-5 bg-cyan-600 text-white rounded-[2rem] font-black uppercase tracking-widest shadow-xl flex items-center gap-3 italic transition-all hover:scale-105 active:scale-95">
+             <Plus size={24} /> Create New Instance
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="fixed inset-0 z-[100] bg-zinc-50 dark:bg-slate-950 flex flex-col font-sans animate-in fade-in duration-500 overflow-hidden">
-      
-      <input type="file" ref={fileInputRef} className="hidden" onChange={handleFileUpload} />
-
-      {/* Universal Header */}
-      <header className="h-20 bg-white dark:bg-slate-900 border-b border-zinc-200 dark:border-white/5 flex items-center justify-between px-8 shrink-0 shadow-sm">
+    <div className="fixed inset-0 z-[100] bg-zinc-50 dark:bg-slate-950 flex flex-col font-sans animate-in fade-in duration-500 overflow-hidden text-slate-900 dark:text-slate-100">
+      <header className="h-20 bg-white dark:bg-slate-900 border-b border-zinc-200 dark:border-white/5 flex items-center justify-between px-8 shrink-0 shadow-sm z-50">
         <div className="flex items-center gap-6">
           <div className="p-3 bg-slate-900 dark:bg-white rounded-2xl shadow-xl">
             <Shield className="text-white dark:text-slate-900" size={24} />
           </div>
           <div>
-            <h1 className="text-xl font-black text-slate-900 dark:text-white tracking-tight uppercase italic leading-none">
-              Project <span className="text-cyan-500">Suite</span>
+            <h1 className="text-xl font-black tracking-tight uppercase italic leading-none">
+              Project <span className="text-cyan-500">Orchestrator</span>
             </h1>
-            <p className="text-[10px] text-slate-400 font-mono tracking-widest uppercase mt-1">{activeProject?.name || 'ConstructAI Master Hub'}</p>
+            <p className="text-[10px] text-slate-400 font-bold tracking-widest uppercase mt-1 flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+              {activeProject.name} • {userRole} MODE
+            </p>
           </div>
         </div>
 
         <div className="flex items-center gap-4">
-          <div className="hidden md:flex items-center gap-4 px-4 py-2 bg-emerald-500/10 border border-emerald-500/20 rounded-xl mr-4">
-             <div className="flex items-center gap-2">
-               <UserCheck size={14} className="text-emerald-600 dark:text-emerald-400" />
-               <span className="text-[10px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-widest">{userRole} ACCESS</span>
-             </div>
-             <div className="w-px h-4 bg-emerald-500/20 mx-2"></div>
-             <span className="text-[10px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-widest">ISO 19650 ACTIVE</span>
-          </div>
-          <Tooltip text="Switch Theme">
-            <button onClick={toggleTheme} className="p-3 bg-zinc-100 dark:bg-slate-800 rounded-2xl transition-all">
-              {isDark ? <Sun size={20} className="text-amber-400" /> : <Moon size={20} className="text-indigo-600" />}
+          <div className="flex bg-zinc-100 dark:bg-slate-800 p-1 rounded-xl border border-zinc-200 dark:border-white/5">
+            <button 
+              onClick={() => setUserRole('MAKER')}
+              className={`px-4 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${userRole === 'MAKER' ? 'bg-white dark:bg-slate-700 shadow-sm text-cyan-600' : 'text-slate-400'}`}
+            >
+              Maker
             </button>
-          </Tooltip>
+            <button 
+              onClick={() => setUserRole('CHECKER')}
+              className={`px-4 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${userRole === 'CHECKER' ? 'bg-white dark:bg-slate-700 shadow-sm text-indigo-600' : 'text-slate-400'}`}
+            >
+              Checker
+            </button>
+          </div>
+          <button onClick={toggleTheme} className="p-3 bg-zinc-100 dark:bg-slate-800 rounded-2xl transition-all border border-zinc-200 dark:border-white/5">
+            {isDark ? <Sun size={20} className="text-amber-400" /> : <Moon size={20} className="text-indigo-600" />}
+          </button>
           <button onClick={onClose} className="p-3 text-slate-400 hover:text-red-500 transition-colors">
             <X size={24} />
           </button>
@@ -134,406 +139,44 @@ const ProjectSuite: React.FC<any> = ({ activeProject, onClose, onUpgrade }) => {
       </header>
 
       <div className="flex-1 flex overflow-hidden">
-        {/* Navigation Sidebar */}
-        <aside className="w-64 bg-white dark:bg-slate-900 border-r border-zinc-200 dark:border-white/5 flex flex-col shrink-0">
-          <div className="p-6 flex-1 overflow-y-auto space-y-8">
+        <aside className="w-72 bg-white dark:bg-slate-900 border-r border-zinc-200 dark:border-white/5 flex flex-col shrink-0">
+          <div className="p-6 flex-1 overflow-y-auto space-y-8 custom-scrollbar">
             <section>
-              <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 px-1">Coordination</h3>
+              <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 px-2">Site Management</h3>
               <nav className="space-y-1">
-                <NavBtn active={activeTab === 'overview'} onClick={() => setActiveTab('overview')} icon={<TrendingUp size={16}/>} label="Executive Overview" />
-                <NavBtn active={activeTab === 'workflows'} onClick={() => setActiveTab('workflows')} icon={<Clock size={16}/>} label="Workflow Engine" />
-                <NavBtn active={activeTab === 'cde'} onClick={() => setActiveTab('cde')} icon={<HardDrive size={16}/>} label="CDE / Documents" />
-                <NavBtn active={activeTab === 'approvals'} onClick={() => setActiveTab('approvals')} icon={<ShieldAlert size={16}/>} label="Approval Center" />
+                <NavBtn active={activeTab === 'overview'} onClick={() => setActiveTab('overview')} icon={<LayoutDashboard size={18}/>} label="Overview" />
+                <NavBtn active={activeTab === 'plans'} onClick={() => setActiveTab('plans')} icon={<Folder size={18}/>} label="Plans & Files" />
+                <NavBtn active={activeTab === 'inventory'} onClick={() => setActiveTab('inventory')} icon={<Database size={18}/>} label="Inventory DB" />
               </nav>
             </section>
 
             <section>
-              <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 px-1">Site & Admin</h3>
+              <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 px-2">Progress & Evidence</h3>
               <nav className="space-y-1">
-                <NavBtn active={activeTab === 'boq'} onClick={() => setActiveTab('boq')} icon={<Calculator size={16}/>} label="BOQ Ledger" />
-                <NavBtn active={activeTab === 'financials'} onClick={() => setActiveTab('financials')} icon={<DollarSign size={16}/>} label="Contract Ledger" />
-                <NavBtn active={activeTab === 'team'} onClick={() => setActiveTab('team')} icon={<Users size={16}/>} label="Team & Access" />
+                <NavBtn active={activeTab === 'timeline'} onClick={() => setActiveTab('timeline')} icon={<GanttIcon size={18}/>} label="Gantt Timeline" />
+                <NavBtn active={activeTab === 'boq'} onClick={() => setActiveTab('boq')} icon={<Calculator size={18}/>} label="BOQ / Tender" />
+                <NavBtn active={activeTab === 'gallery'} onClick={() => setActiveTab('gallery')} icon={<Camera size={18}/>} label="Site Gallery" count={media.length} />
               </nav>
             </section>
-          </div>
 
-          <div className="p-6 border-t border-zinc-100 dark:border-white/5">
-            <button onClick={onUpgrade} className="w-full group bg-slate-900 dark:bg-white p-4 rounded-2xl text-white dark:text-slate-900 flex items-center justify-between shadow-xl transition-all hover:scale-[1.02] active:scale-95">
-               <span className="text-[10px] font-black uppercase tracking-widest">Enterprise Sync</span>
-               <ArrowRight size={16} className="group-hover:translate-x-1 transition-transform" />
-            </button>
+            <section>
+              <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 px-2">Governance</h3>
+              <nav className="space-y-1">
+                <NavBtn active={activeTab === 'reports'} onClick={() => setActiveTab('reports')} icon={<FileSpreadsheet size={18}/>} label="Daily Reports" count={reports.length} />
+              </nav>
+            </section>
           </div>
         </aside>
 
-        {/* Main Content Area */}
-        <main className="flex-1 overflow-y-auto bg-zinc-50 dark:bg-slate-950 p-8">
-          <div className="max-w-7xl mx-auto space-y-8 pb-20">
-            
-            {activeTab === 'overview' && (
-              <div className="animate-in fade-in duration-500">
-                <h2 className="text-3xl font-black text-slate-900 dark:text-white uppercase italic tracking-tighter mb-8">Executive Project Command</h2>
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-                  <StatCard label="Project Valuation" value={`₹${(totalBudget/100000).toFixed(1)}L`} sub="Extracted + MOCK" icon={<IndianRupee className="text-emerald-500"/>} />
-                  <StatCard label="CDE Records" value={docs.length} sub="ISO 19650 Vaulted" icon={<HardDrive className="text-blue-500"/>} />
-                  <StatCard label="Critical RFIs" value={MOCK_RFIS.filter(r => r.status === 'OPEN').length} sub="Pending Action" icon={<AlertCircle className="text-orange-500"/>} />
-                  <StatCard label="BOQ Line Items" value={boqData.length || 'N/A'} sub="AI Extracted" icon={<Calculator className="text-purple-500"/>} />
-                </div>
-              </div>
-            )}
-
-            {activeTab === 'boq' && (
-               <div className="animate-in fade-in slide-in-from-right-4 duration-500 space-y-8">
-                  <div className="flex justify-between items-end">
-                    <div>
-                        <h2 className="text-3xl font-black text-slate-900 dark:text-white uppercase italic tracking-tighter">BOQ Ledger</h2>
-                        <p className="text-slate-500 text-[10px] font-black uppercase tracking-widest mt-1">Synced Quantities & AI Material Audit • Standard IS 1200</p>
-                    </div>
-                    <div className="flex gap-3">
-                      <button className="flex items-center gap-2 bg-slate-800 text-white px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest border border-slate-700">
-                         <Download size={14}/> Export IS-1200
-                      </button>
-                      <button className="flex items-center gap-2 bg-blue-600 text-white px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-xl shadow-blue-600/20 active:scale-95 transition-all">
-                         <Plus size={14}/> Import Items
-                      </button>
-                    </div>
-                  </div>
-                  
-                  {boqData.length > 0 ? (
-                    <div className="bg-white dark:bg-slate-900 border border-zinc-200 dark:border-white/5 rounded-[3rem] overflow-hidden shadow-xl">
-                      <table className="w-full text-left">
-                        <thead className="bg-zinc-50 dark:bg-slate-950 text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                          <tr>
-                            <th className="px-8 py-6">SOR Code & Item Description</th>
-                            <th className="px-8 py-6">Category</th>
-                            <th className="px-8 py-6 text-right">Quantity</th>
-                            <th className="px-8 py-6 text-right">Rate</th>
-                            <th className="px-8 py-6 text-right">Amount (₹)</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-zinc-100 dark:divide-white/5">
-                          {boqData.map((item: any, idx: number) => (
-                            <tr key={idx} className="hover:bg-amber-500/5 transition-colors group">
-                              <td className="px-8 py-6">
-                                <div className="text-xs font-black text-slate-900 dark:text-white uppercase tracking-tight mb-1">{item.code || 'UNCODED'}</div>
-                                <div className="text-[11px] text-slate-500 font-medium leading-relaxed">{item.description}</div>
-                              </td>
-                              <td className="px-8 py-6">
-                                <span className="px-3 py-1 bg-zinc-100 dark:bg-white/5 rounded-full text-[9px] font-black text-slate-500 uppercase tracking-widest border border-zinc-200 dark:border-white/5">
-                                  {item.category}
-                                </span>
-                              </td>
-                              <td className="px-8 py-6 text-right font-mono text-xs font-bold text-slate-900 dark:text-white">{item.qty} <span className="text-[9px] text-slate-400 font-black">{item.unit}</span></td>
-                              <td className="px-8 py-6 text-right font-mono text-xs text-slate-400">₹{item.rate?.toLocaleString()}</td>
-                              <td className="px-8 py-6 text-right font-mono text-xs font-black text-amber-600">₹{item.amount?.toLocaleString()}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                        <tfoot className="bg-zinc-50 dark:bg-slate-950/50">
-                          <tr>
-                            <td colSpan={4} className="px-8 py-6 text-right text-[10px] font-black text-slate-400 uppercase tracking-widest">Total Base Quantities Valuation</td>
-                            <td className="px-8 py-6 text-right text-lg font-black text-amber-500 italic">₹{totalBoqValue.toLocaleString()}</td>
-                          </tr>
-                        </tfoot>
-                      </table>
-                    </div>
-                  ) : (
-                    <div className="bg-white dark:bg-slate-900 border border-zinc-200 dark:border-white/5 rounded-[3rem] p-12 text-center">
-                       <div className="w-20 h-20 bg-amber-500/10 rounded-3xl flex items-center justify-center text-amber-500 mx-auto mb-6">
-                          <FileSpreadsheet size={32} />
-                       </div>
-                       <h3 className="text-xl font-black text-slate-900 dark:text-white uppercase italic mb-2">Quantities Repository Empty</h3>
-                       <p className="text-slate-500 text-xs font-medium max-w-sm mx-auto leading-relaxed italic">Use the "AI Quantities Extractor" from the landing page to populate this ledger with spatially verified project items.</p>
-                    </div>
-                  )}
-               </div>
-            )}
-
-            {activeTab === 'workflows' && (
-              <div className="animate-in slide-in-from-left-4 duration-500 space-y-8 h-full flex flex-col">
-                <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6">
-                   <div className="space-y-1">
-                      <h2 className="text-3xl font-black text-slate-900 dark:text-white uppercase italic tracking-tighter leading-none">Workflow Command</h2>
-                      <p className="text-slate-500 text-[10px] font-black uppercase tracking-widest">Collaborative Coordination Engine • SLA Tracking Active</p>
-                   </div>
-                   <div className="flex items-center gap-3 bg-white dark:bg-slate-900 p-1.5 rounded-2xl border border-zinc-200 dark:border-white/10 shadow-sm">
-                      <WorkflowTab active={activeWorkflowType === 'RFI'} onClick={() => setActiveWorkflowType('RFI')} icon={<MessageSquare size={14}/>} label="RFIs" count={MOCK_RFIS.length} />
-                      <WorkflowTab active={activeWorkflowType === 'SUBMITTAL'} onClick={() => setActiveWorkflowType('SUBMITTAL')} icon={<FileUp size={14}/>} label="Submittals" count={MOCK_SUBMITTALS.length} />
-                      <WorkflowTab active={activeWorkflowType === 'INSPECTION'} onClick={() => setActiveWorkflowType('INSPECTION')} icon={<ClipboardCheck size={14}/>} label="Inspections" count={0} />
-                   </div>
-                   <div className="flex gap-2">
-                      <div className="flex bg-zinc-100 dark:bg-slate-800 rounded-xl p-1 border border-zinc-200 dark:border-white/5 mr-2">
-                        <button onClick={() => setWorkflowView('board')} className={`p-2 rounded-lg transition-all ${workflowView === 'board' ? 'bg-white dark:bg-slate-700 text-cyan-500 shadow-sm' : 'text-slate-400'}`}><Trello size={14}/></button>
-                        <button onClick={() => setWorkflowView('list')} className={`p-2 rounded-lg transition-all ${workflowView === 'list' ? 'bg-white dark:bg-slate-700 text-cyan-500 shadow-sm' : 'text-slate-400'}`}><List size={14}/></button>
-                      </div>
-                      <button className="flex items-center gap-2 bg-blue-600 text-white px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-xl shadow-blue-600/20 active:scale-95 transition-all">
-                         <Plus size={14}/> Create New {activeWorkflowType}
-                      </button>
-                   </div>
-                </div>
-
-                {workflowView === 'board' ? (
-                   <div className="grid grid-cols-1 md:grid-cols-3 gap-8 min-h-[500px]">
-                      {['OPEN', 'UNDER_REVIEW', 'CLOSED'].map(status => (
-                         <div key={status} className="bg-zinc-100/50 dark:bg-slate-900/50 border border-zinc-200 dark:border-white/5 rounded-[2.5rem] p-6 flex flex-col shadow-inner">
-                            <div className="flex justify-between items-center mb-6 px-2">
-                              <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{status.replace('_', ' ')}</h4>
-                              <span className="w-6 h-6 rounded-full bg-white dark:bg-slate-800 flex items-center justify-center text-[10px] font-black text-slate-400 border border-zinc-200 dark:border-white/5 shadow-sm">
-                                {activeWorkflowType === 'RFI' ? MOCK_RFIS.filter(r => r.status === (status === 'UNDER_REVIEW' ? 'PENDING_APPROVAL' : status)).length : MOCK_SUBMITTALS.filter(s => s.status === status).length}
-                              </span>
-                            </div>
-                            
-                            <div className="space-y-4 overflow-y-auto pr-1 scrollbar-hide flex-1">
-                               {activeWorkflowType === 'RFI' ? (
-                                 MOCK_RFIS.filter(r => r.status === (status === 'UNDER_REVIEW' ? 'PENDING_APPROVAL' : status)).map(rfi => (
-                                    <WorkflowCard key={rfi.id} title={rfi.title} id={rfi.id} priority={rfi.priority} assignee={rfi.assignedTo} dueDate={rfi.dueDate} />
-                                 ))
-                               ) : (
-                                 MOCK_SUBMITTALS.filter(s => s.status === status).map(sub => (
-                                    <WorkflowCard key={sub.id} title={sub.title} id={sub.id} priority={sub.priority} assignee={sub.assignedTo} dueDate={sub.dueDate} meta={sub.specSection} />
-                                 ))
-                               )}
-
-                               {((activeWorkflowType === 'RFI' && MOCK_RFIS.filter(r => r.status === (status === 'UNDER_REVIEW' ? 'PENDING_APPROVAL' : status)).length === 0) || 
-                                 (activeWorkflowType === 'SUBMITTAL' && MOCK_SUBMITTALS.filter(s => s.status === status).length === 0)) && (
-                                 <div className="py-20 flex flex-col items-center justify-center opacity-10 italic">
-                                    <CheckCircle2 size={32} />
-                                    <span className="text-[9px] font-black uppercase mt-2">No Items</span>
-                                 </div>
-                               )}
-                            </div>
-                         </div>
-                      ))}
-                   </div>
-                ) : (
-                  <div className="bg-white dark:bg-slate-900 border border-zinc-200 dark:border-white/5 rounded-[2.5rem] overflow-hidden shadow-xl">
-                      <table className="w-full text-left">
-                         <thead className="bg-zinc-50 dark:bg-slate-950 text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                            <tr>
-                               <th className="px-8 py-5">Reference & Title</th>
-                               <th className="px-8 py-5">Status</th>
-                               <th className="px-8 py-5">Assignee</th>
-                               <th className="px-8 py-5">SLA Due Date</th>
-                               <th className="px-8 py-5 text-right">Action</th>
-                            </tr>
-                         </thead>
-                         <tbody className="divide-y divide-zinc-100 dark:divide-white/5">
-                            {(activeWorkflowType === 'RFI' ? MOCK_RFIS : MOCK_SUBMITTALS).map((item: any) => (
-                               <tr key={item.id} className="hover:bg-zinc-50 dark:hover:bg-white/5 transition-colors cursor-pointer group">
-                                  <td className="px-8 py-5">
-                                     <div className="flex items-center gap-4">
-                                        <div className="w-10 h-10 bg-slate-100 dark:bg-white/5 rounded-xl flex items-center justify-center text-slate-400 group-hover:bg-blue-600 group-hover:text-white transition-all shadow-sm"><FileText size={18}/></div>
-                                        <div>
-                                           <div className="text-xs font-black text-slate-900 dark:text-white uppercase tracking-tight">{item.id}</div>
-                                           <div className="text-[10px] text-slate-500 font-bold mt-0.5 truncate max-w-[300px]">{item.title}</div>
-                                        </div>
-                                     </div>
-                                  </td>
-                                  <td className="px-8 py-5">
-                                     <span className="px-3 py-1 bg-blue-500/10 border border-blue-500/20 text-[9px] font-black text-blue-600 uppercase tracking-widest rounded-full">{item.status.replace('_', ' ')}</span>
-                                  </td>
-                                  <td className="px-8 py-5 text-xs font-bold text-slate-600 dark:text-slate-400 uppercase">{item.assignedTo}</td>
-                                  <td className="px-8 py-5 text-xs font-mono text-slate-500">{item.dueDate}</td>
-                                  <td className="px-8 py-5 text-right">
-                                     <button className="p-2 text-slate-400 hover:text-blue-600 transition-colors"><ChevronRight size={18}/></button>
-                                  </td>
-                               </tr>
-                            ))}
-                         </tbody>
-                      </table>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {activeTab === 'cde' && (
-              <div className="animate-in slide-in-from-right-4 duration-500 flex flex-col h-[calc(100vh-14rem)] bg-white dark:bg-slate-900 border border-zinc-200 dark:border-white/5 rounded-[3rem] overflow-hidden shadow-2xl">
-                <div className="p-6 border-b border-zinc-100 dark:border-white/5 flex items-center justify-between bg-zinc-50/50 dark:bg-white/5">
-                  <div className="flex items-center gap-4">
-                    <div className="bg-blue-600 p-3 rounded-2xl text-white shadow-lg shadow-blue-600/20"><HardDrive size={20}/></div>
-                    <div>
-                      <h3 className="text-lg font-black text-slate-900 dark:text-white uppercase italic tracking-tighter leading-none">Common Data Environment</h3>
-                      <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1">ISO 19650 Project Vault</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <button onClick={triggerUpload} disabled={isUploading} className="flex items-center gap-2 bg-blue-600 text-white px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest shadow-xl shadow-blue-600/20 active:scale-95 transition-all disabled:opacity-50">
-                      {isUploading ? <Loader2 size={16} className="animate-spin" /> : <UploadCloud size={16}/>} 
-                      {isUploading ? 'Syncing...' : 'Upload Asset'}
-                    </button>
-                  </div>
-                </div>
-
-                <div className="flex flex-1 overflow-hidden">
-                  <aside className="w-72 border-r border-zinc-100 dark:border-white/5 p-6 overflow-y-auto space-y-6">
-                    <section>
-                      <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 px-2 italic">Standard Folders</h4>
-                      <div className="space-y-1">
-                        {MOCK_FOLDERS.map(f => (
-                          <div key={f.id} className="flex items-center gap-3 p-3 rounded-xl hover:bg-blue-500/10 hover:text-blue-600 dark:hover:text-blue-400 cursor-pointer text-slate-600 dark:text-slate-400 transition-all group">
-                            <Folder size={16} className="text-slate-400 group-hover:text-blue-500 transition-colors" />
-                            <span className="text-xs font-black uppercase tracking-tight">{f.name}</span>
-                          </div>
-                        ))}
-                      </div>
-                    </section>
-                  </aside>
-
-                  <div className="flex-1 overflow-y-auto">
-                    <table className="w-full text-left">
-                      <thead className="bg-zinc-50 dark:bg-slate-950 text-[10px] font-black text-slate-400 uppercase tracking-widest sticky top-0 z-10">
-                        <tr>
-                          <th className="px-8 py-5">Metadata</th>
-                          <th className="px-8 py-5">ISO Status</th>
-                          <th className="px-8 py-5">Approval</th>
-                          <th className="px-8 py-5">Modified</th>
-                          <th className="px-8 py-5 text-right">Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-zinc-100 dark:divide-white/5">
-                        {docs.map((doc: any) => (
-                          <tr key={doc.id} className="hover:bg-blue-600/5 transition-colors group cursor-pointer">
-                            <td className="px-8 py-5">
-                              <div className="flex items-center gap-4">
-                                <div className="w-10 h-10 bg-slate-100 dark:bg-white/5 rounded-xl flex items-center justify-center text-slate-400 group-hover:bg-blue-600 group-hover:text-white transition-all shadow-sm">
-                                  {doc.extension === 'PDF' ? <FileText size={18}/> : <File size={18}/>}
-                                </div>
-                                <div>
-                                  <div className="text-xs font-black text-slate-900 dark:text-white leading-none mb-1 uppercase tracking-tight">{doc.name}.{doc.extension}</div>
-                                  <div className="text-[9px] text-slate-400 uppercase font-bold tracking-widest">Maker: {doc.author} • {doc.size}</div>
-                                </div>
-                              </div>
-                            </td>
-                            <td className="px-8 py-5">
-                               <span className="px-3 py-1 bg-blue-500/10 border border-blue-500/20 text-[9px] font-black text-blue-600 uppercase tracking-widest w-fit shadow-sm rounded-full">
-                                 {doc.status}
-                               </span>
-                            </td>
-                            <td className="px-8 py-5">
-                               <div className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest w-fit shadow-sm border ${
-                                 doc.approvalStatus === 'APPROVED' ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-500' :
-                                 doc.approvalStatus === 'PENDING_REVIEW' ? 'bg-amber-500/10 border-amber-500/20 text-amber-500' :
-                                 'bg-slate-500/10 border-slate-500/20 text-slate-500'
-                               }`}>
-                                 {doc.approvalStatus.replace('_', ' ')}
-                               </div>
-                            </td>
-                            <td className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest">{doc.lastModified}</td>
-                            <td className="px-8 py-5 text-right">
-                               <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-all">
-                                  {doc.approvalStatus === 'PENDING_REVIEW' && userRole === 'CHECKER' && (
-                                    <button onClick={(e) => { e.stopPropagation(); handleApprove(doc.id); }} className="p-2 text-emerald-500 hover:bg-emerald-500/10 rounded-lg"><CheckCircle2 size={16}/></button>
-                                  )}
-                                  <button className="p-2 text-slate-400 hover:text-blue-600"><Download size={16}/></button>
-                                  <button className="p-2 text-slate-400 hover:text-slate-900 dark:hover:text-white"><MoreVertical size={16}/></button>
-                               </div>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {activeTab === 'approvals' && (
-              <div className="animate-in slide-in-from-left-4 duration-500 space-y-8">
-                 <div className="flex justify-between items-end">
-                    <div>
-                        <h2 className="text-3xl font-black text-slate-900 dark:text-white uppercase italic tracking-tighter leading-none mb-2">Approval Center</h2>
-                        <p className="text-slate-500 text-[10px] font-black uppercase tracking-widest">ISO 19650 Compliance Workflows (Checker Module)</p>
-                    </div>
-                 </div>
-                 <div className="grid grid-cols-1 gap-4">
-                    {docs.filter((d: any) => d.approvalStatus === 'PENDING_REVIEW').length > 0 ? (
-                      docs.filter((d: any) => d.approvalStatus === 'PENDING_REVIEW').map((doc: any) => (
-                        <div key={doc.id} className="bg-white dark:bg-slate-900 border border-zinc-200 dark:border-white/5 p-8 rounded-[2.5rem] flex items-center justify-between shadow-sm group hover:shadow-xl transition-all">
-                            <div className="flex items-center gap-6">
-                               <div className="p-5 bg-amber-500/10 rounded-3xl text-amber-500">
-                                  <FileText size={28} />
-                               </div>
-                               <div>
-                                  <h4 className="text-lg font-black text-slate-900 dark:text-white uppercase italic leading-none">{doc.name}.{doc.extension}</h4>
-                                  <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-2">RAISED BY MAKER: {doc.author} • {doc.lastModified}</p>
-                               </div>
-                            </div>
-                            <div className="flex items-center gap-3">
-                               <button className="px-8 py-3 bg-emerald-500 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-xl shadow-emerald-500/20 active:scale-95 transition-all" onClick={() => handleApprove(doc.id)}>Publish (S2)</button>
-                            </div>
-                        </div>
-                      ))
-                    ) : (
-                      <div className="py-32 flex flex-col items-center justify-center bg-white dark:bg-slate-900 border border-dashed border-zinc-200 dark:border-white/10 rounded-[4rem] text-slate-400 opacity-50">
-                          <CheckCircle2 size={64} className="mb-4 text-emerald-500/50" />
-                          <h3 className="text-lg font-black uppercase italic tracking-widest">Workflow Clear</h3>
-                          <p className="text-[10px] font-black uppercase tracking-widest mt-1">No pending audits for your role</p>
-                      </div>
-                    )}
-                 </div>
-              </div>
-            )}
-
-            {activeTab === 'team' && (
-              <div className="animate-in fade-in duration-500 space-y-10">
-                <div className="bg-slate-900 dark:bg-white p-12 rounded-[4rem] shadow-2xl relative overflow-hidden text-center md:text-left flex flex-col md:flex-row justify-between items-center">
-                    <div className="relative z-10 space-y-2">
-                        <h2 className="text-4xl font-black text-white dark:text-slate-950 uppercase italic tracking-tighter leading-none">Access Control</h2>
-                        <p className="text-slate-400 dark:text-slate-500 text-xs font-black uppercase tracking-widest italic">Maker/Checker Hierarchy for ISO Governance</p>
-                    </div>
-                    <div className="mt-8 md:mt-0 relative z-10">
-                       <button className="px-10 py-5 bg-cyan-600 text-white rounded-[2rem] font-black uppercase tracking-[0.2em] shadow-2xl hover:scale-105 active:scale-95 transition-all italic">Add Key Partner</button>
-                    </div>
-                </div>
-
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
-                   {/* Invite Section */}
-                   <div className="bg-white dark:bg-slate-900 border border-zinc-200 dark:border-white/5 p-10 rounded-[3rem] shadow-sm">
-                      <h3 className="text-xl font-black text-slate-900 dark:text-white uppercase italic mb-8">Invite Workforce</h3>
-                      <div className="space-y-6">
-                        <div className="space-y-2">
-                           <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Email Address</label>
-                           <input value={inviteEmail} onChange={(e) => setInviteEmail(e.target.value)} placeholder="name@lnt.com" className="w-full bg-zinc-50 dark:bg-slate-950 border border-zinc-200 dark:border-white/10 rounded-2xl py-4 px-6 text-sm text-slate-900 dark:text-white outline-none focus:ring-4 focus:ring-cyan-500/10 transition-all" />
-                        </div>
-                        <div className="grid grid-cols-2 gap-2">
-                           {['MAKER', 'CHECKER'].map((r) => (
-                             <button key={r} onClick={() => setInviteRole(r as any)} className={`p-4 rounded-2xl border text-[10px] font-black uppercase tracking-widest transition-all ${inviteRole === r ? 'bg-cyan-500 text-white border-cyan-500 shadow-xl' : 'bg-zinc-50 dark:bg-white/5 border-zinc-100 dark:border-white/5 text-slate-500'}`}>{r === 'MAKER' ? 'Maker' : 'Checker'}</button>
-                           ))}
-                        </div>
-                        <button onClick={handleAddTeamMember} className="w-full bg-slate-900 dark:bg-white py-5 rounded-[1.5rem] text-white dark:text-slate-900 font-black uppercase tracking-widest shadow-2xl flex items-center justify-center gap-3 active:scale-95 transition-all"><UserPlus size={18} /> Send Access Key</button>
-                      </div>
-                   </div>
-
-                   {/* Team List Section */}
-                   <div className="lg:col-span-2 bg-white dark:bg-slate-900 border border-zinc-200 dark:border-white/5 p-10 rounded-[3rem] shadow-sm">
-                      <div className="flex justify-between items-center mb-8 px-2">
-                         <h3 className="text-xl font-black text-slate-900 dark:text-white uppercase italic">Active Workforce</h3>
-                         <div className="flex items-center gap-2 px-3 py-1 bg-zinc-100 dark:bg-white/5 rounded-full"><ShieldCheck size={12} className="text-emerald-500" /><span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Secured</span></div>
-                      </div>
-                      <div className="space-y-4">
-                        {team.map((member) => (
-                          <div key={member.id} className="p-6 bg-zinc-50 dark:bg-white/5 rounded-[2.5rem] flex items-center justify-between border border-transparent hover:border-cyan-500/20 transition-all group">
-                             <div className="flex items-center gap-6">
-                                <div className="w-14 h-14 bg-white dark:bg-slate-800 rounded-3xl flex items-center justify-center text-xl font-black text-slate-300 group-hover:bg-cyan-600 group-hover:text-white transition-all shadow-sm">{member.name[0]}</div>
-                                <div>
-                                   <div className="text-sm font-black text-slate-900 dark:text-white uppercase italic leading-none">{member.name}</div>
-                                   <div className="text-[10px] text-slate-400 font-bold mt-1.5">{member.email}</div>
-                                </div>
-                             </div>
-                             <div className="flex items-center gap-10">
-                                <div className="text-right">
-                                   <div className={`px-4 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest border ${member.role === 'CHECKER' ? 'bg-purple-500/10 border-purple-500/20 text-purple-600 dark:text-purple-400' : 'bg-cyan-500/10 border-cyan-500/20 text-cyan-600 dark:text-cyan-400'}`}>{member.role}</div>
-                                   <div className="text-[8px] text-slate-400 font-black uppercase tracking-widest mt-2">{member.status} • JOINED {member.joinedDate}</div>
-                                </div>
-                                <button className="p-3 text-slate-300 hover:text-red-500 transition-all opacity-0 group-hover:opacity-100"><UserMinus size={18} /></button>
-                             </div>
-                          </div>
-                        ))}
-                      </div>
-                   </div>
-                </div>
-              </div>
-            )}
-            
+        <main className="flex-1 overflow-y-auto p-10 custom-scrollbar bg-zinc-50/50 dark:bg-slate-950">
+          <div className="max-w-7xl mx-auto space-y-8 animate-in fade-in duration-500 pb-24">
+            {activeTab === 'overview' && <OverviewTab tasks={tasks} media={media} />}
+            {activeTab === 'plans' && <PlansTab />}
+            {activeTab === 'inventory' && <InventoryTab inventory={inventory} setInventory={setInventory} machineries={machineries} setMachineries={setMachineries} role={userRole} />}
+            {activeTab === 'timeline' && <TimelineTab tasks={tasks} setTasks={setTasks} role={userRole} />}
+            {activeTab === 'boq' && <BoqTab items={boqItems} setItems={setBoqItems} role={userRole} />}
+            {activeTab === 'gallery' && <GalleryTab media={media} setMedia={setMedia} role={userRole} />}
+            {activeTab === 'reports' && <ReportsTab activeProject={activeProject} media={media} machineries={machineries} reports={reports} setReports={setReports} />}
           </div>
         </main>
       </div>
@@ -541,58 +184,753 @@ const ProjectSuite: React.FC<any> = ({ activeProject, onClose, onUpgrade }) => {
   );
 };
 
-const NavBtn = ({ active, onClick, icon, label }: any) => (
-  <button 
-    onClick={onClick} 
-    className={`w-full flex items-center gap-4 p-4 rounded-2xl font-black text-[11px] uppercase tracking-tight transition-all border ${active ? 'bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 border-cyan-500/20 shadow-xl' : 'text-slate-400 border-transparent hover:bg-zinc-100 dark:hover:bg-white/5'}`}
-  >
-    <div className={`shrink-0 transition-transform ${active ? 'scale-110' : ''}`}>{icon}</div>
-    {label}
-  </button>
-);
+/* Tabs Content Components */
 
-const WorkflowTab = ({ active, onClick, icon, label, count }: any) => (
-  <button onClick={onClick} className={`flex items-center gap-2 px-6 py-2.5 rounded-xl transition-all ${active ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-700 dark:hover:text-white'}`}>
-    {icon}
-    <span className="text-[10px] font-black uppercase tracking-widest">{label}</span>
-    <span className={`px-1.5 py-0.5 rounded-md text-[8px] font-bold ${active ? 'bg-white/20' : 'bg-zinc-100 dark:bg-slate-800'}`}>{count}</span>
-  </button>
-);
+const OverviewTab = ({ tasks, media }: any) => {
+  const completedCount = tasks.filter((t: any) => t.status === 'COMPLETED').length;
+  const progress = tasks.length > 0 ? Math.round((completedCount / tasks.length) * 100) : 0;
 
-const WorkflowCard = ({ title, id, priority, assignee, dueDate, meta }: any) => (
-  <div className="p-6 bg-white dark:bg-slate-900 border border-zinc-100 dark:border-white/10 rounded-3xl hover:border-blue-500 transition-all cursor-pointer group shadow-sm hover:shadow-xl">
-    <div className="flex justify-between items-start mb-4">
-        <span className="text-[10px] font-black text-blue-600 uppercase tracking-widest">{id}</span>
-        <div className={`px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-widest ${priority === 'HIGH' ? 'bg-red-500/10 text-red-500 border border-red-500/20' : 'bg-orange-500/10 text-orange-500 border border-orange-500/20'}`}>
-          {priority}
+  return (
+    <div className="space-y-8">
+      <div className="flex justify-between items-end">
+        <div>
+          <h2 className="text-4xl font-black uppercase italic tracking-tighter">Project Status</h2>
+          <p className="text-slate-500 font-medium italic mt-2">Aggregated site metrics and real-time vision sync.</p>
         </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+        <StatCard label="Overall Progress" value={`${progress}%`} sub={`${tasks.length} Tasks Tracked`} icon={<Clock className="text-cyan-500"/>} />
+        <StatCard label="WBS Health" value={tasks.length > 0 ? 'ACTIVE' : 'IDLE'} sub="Schedule State" icon={<GanttIcon className="text-orange-500"/>} />
+        <StatCard label="Live Evidence" value={media.length} sub="Captures Logged" icon={<Camera className="text-indigo-500"/>} />
+        <StatCard label="Site Safety" value="VERIFIED" sub="IS-Code Compliant" icon={<ShieldCheck className="text-emerald-500"/>} />
+      </div>
     </div>
-    <div className="text-sm font-black text-slate-900 dark:text-white uppercase italic tracking-tight group-hover:text-blue-600 transition-colors mb-4 leading-tight">{title}</div>
-    {meta && <div className="text-[9px] font-bold text-slate-400 uppercase mb-4 px-2 py-1 bg-slate-100 dark:bg-slate-800 rounded-lg w-fit">{meta}</div>}
-    
-    <div className="flex justify-between items-center pt-4 border-t border-zinc-50 dark:border-white/5">
-        <div className="flex items-center gap-2">
-          <div className="w-6 h-6 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-[9px] font-black text-slate-500">{assignee[0]}</div>
-          <span className="text-[9px] font-bold text-slate-500 uppercase truncate max-w-[80px]">{assignee}</span>
-        </div>
-        <div className="flex items-center gap-1.5 text-[9px] font-black text-slate-400 uppercase tracking-widest">
-          <Clock size={10} className="text-blue-500"/> {dueDate.split('-').slice(1).join('/')}
-        </div>
+  );
+};
+
+const PlansTab = () => (
+  <div className="space-y-8">
+    <div className="flex justify-between items-center">
+      <h2 className="text-3xl font-black uppercase italic tracking-tighter">CDE Repository</h2>
+      <button className="px-6 py-3 bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-xl text-[10px] font-black uppercase tracking-widest shadow-xl flex items-center gap-2">
+        <UploadCloud size={16}/> Upload New Plan
+      </button>
+    </div>
+    <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+      <FolderCard name="Structural" count={0} icon={<Folder className="text-cyan-500"/>} />
+      <FolderCard name="Architectural" count={0} icon={<Folder className="text-indigo-500"/>} />
+      <FolderCard name="MEP" count={0} icon={<Folder className="text-orange-500"/>} />
+      <FolderCard name="Site Reports" count={0} icon={<Folder className="text-emerald-500"/>} />
     </div>
   </div>
+);
+
+const InventoryTab = ({ inventory, setInventory, machineries, setMachineries, role }: any) => {
+  const [showAddMaterial, setShowAddMaterial] = useState(false);
+  const [showAddMachine, setShowAddMachine] = useState(false);
+  
+  // Forms
+  const [matName, setMatName] = useState('');
+  const [matQty, setMatQty] = useState<number>(0);
+  const [matUnit, setMatUnit] = useState('Bags');
+  const [matType, setMatType] = useState<'INWARD' | 'OUTWARD'>('INWARD');
+  
+  const [macName, setMacName] = useState('');
+  const [macStage, setMacStage] = useState('');
+  const [macCond, setMacCond] = useState<'ACTIVE' | 'IDLE' | 'NON-USE'>('IDLE');
+  const [macFuel, setMacFuel] = useState('0L/hr');
+
+  const addMaterial = () => {
+    if (!matName) return;
+    const newEntry: MaterialTransaction = {
+      id: `MAT-${Date.now()}`,
+      name: matName,
+      qty: matQty,
+      unit: matUnit,
+      type: matType,
+      timestamp: new Date().toISOString()
+    };
+    setInventory([newEntry, ...inventory]);
+    setShowAddMaterial(false);
+    setMatName(''); setMatQty(0);
+  };
+
+  const addMachine = () => {
+    if (!macName) return;
+    const newMachine: Machine = {
+      id: `MCH-${Date.now()}`,
+      name: macName,
+      stage: macStage || 'Unassigned',
+      condition: macCond,
+      fuelCons: macFuel,
+      health: 'Good'
+    };
+    setMachineries([...machineries, newMachine]);
+    setShowAddMachine(false);
+    setMacName(''); setMacStage('');
+  };
+
+  const exportInventory = () => {
+    const headers = "Date,Time,Material,Qty,Unit,Type\n";
+    const rows = inventory.map(item => 
+      `${new Date(item.timestamp).toLocaleDateString()},${new Date(item.timestamp).toLocaleTimeString()},${item.name},${item.qty},${item.unit},${item.type}`
+    ).join("\n");
+    const blob = new Blob([headers + rows], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `Inventory_Report_${new Date().toISOString().slice(0,10)}.csv`;
+    link.click();
+  };
+
+  const exportMachinery = () => {
+    const headers = "Machine,Stage,Condition,Fuel Consumption\n";
+    const rows = machineries.map(m => `${m.name},${m.stage},${m.condition},${m.fuelCons}`).join("\n");
+    const blob = new Blob([headers + rows], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `Machinery_Status_${new Date().toISOString().slice(0,10)}.csv`;
+    link.click();
+  };
+
+  return (
+    <div className="space-y-12">
+      <div className="space-y-6">
+        <div className="flex justify-between items-center">
+          <div>
+            <h2 className="text-3xl font-black uppercase italic tracking-tighter">Material Timeline</h2>
+            <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-1">Inward & Outward Movements</p>
+          </div>
+          <div className="flex gap-3">
+             <button onClick={exportInventory} className="px-6 py-3 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center gap-2 border border-zinc-200 dark:border-white/5">
+                <FileOutput size={16}/> Export Ledger
+             </button>
+             {role === 'MAKER' && (
+               <button onClick={() => setShowAddMaterial(!showAddMaterial)} className="px-6 py-3 bg-emerald-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-xl flex items-center gap-2">
+                {showAddMaterial ? <X size={16}/> : <Plus size={16}/>} Log Transaction
+               </button>
+             )}
+          </div>
+        </div>
+
+        {showAddMaterial && (
+          <div className="bg-white dark:bg-slate-900 p-8 rounded-[2.5rem] border-2 border-emerald-500/30 shadow-xl grid grid-cols-1 md:grid-cols-5 gap-4 items-end animate-in slide-in-from-top-4">
+             <div className="space-y-2">
+                <label className="text-[9px] font-black uppercase text-slate-500 px-1">Material Name</label>
+                <input value={matName} onChange={e => setMatName(e.target.value)} placeholder="e.g. Cement Bags" className="w-full bg-zinc-100 dark:bg-slate-800 rounded-xl p-3 text-xs outline-none focus:ring-1 focus:ring-emerald-500"/>
+             </div>
+             <div className="space-y-2">
+                <label className="text-[9px] font-black uppercase text-slate-500 px-1">Qty</label>
+                <input type="number" value={matQty} onChange={e => setMatQty(parseFloat(e.target.value))} className="w-full bg-zinc-100 dark:bg-slate-800 rounded-xl p-3 text-xs outline-none focus:ring-1 focus:ring-emerald-500"/>
+             </div>
+             <div className="space-y-2">
+                <label className="text-[9px] font-black uppercase text-slate-500 px-1">Unit</label>
+                <input value={matUnit} onChange={e => setMatUnit(e.target.value)} placeholder="Bags, Cum..." className="w-full bg-zinc-100 dark:bg-slate-800 rounded-xl p-3 text-xs outline-none focus:ring-1 focus:ring-emerald-500"/>
+             </div>
+             <div className="space-y-2">
+                <label className="text-[9px] font-black uppercase text-slate-500 px-1">Type</label>
+                <select value={matType} onChange={e => setMatType(e.target.value as any)} className="w-full bg-zinc-100 dark:bg-slate-800 rounded-xl p-3 text-xs outline-none appearance-none">
+                   <option value="INWARD">Received (Inward)</option>
+                   <option value="OUTWARD">Used (Outward)</option>
+                </select>
+             </div>
+             <button onClick={addMaterial} className="bg-emerald-600 text-white h-11 rounded-xl text-[10px] font-black uppercase">Confirm Log</button>
+          </div>
+        )}
+
+        <div className="bg-white dark:bg-slate-900 rounded-[3rem] border border-zinc-200 dark:border-white/5 overflow-hidden shadow-xl">
+           <table className="w-full text-left">
+              <thead className="bg-zinc-50 dark:bg-slate-950 text-[10px] font-black text-slate-500 uppercase tracking-widest border-b border-zinc-200 dark:border-white/10">
+                <tr>
+                  <th className="px-8 py-6">Timestamp</th>
+                  <th className="px-8 py-6">Material</th>
+                  <th className="px-8 py-6">Action</th>
+                  <th className="px-8 py-6">Quantity</th>
+                  <th className="px-8 py-6 text-right">Verification</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-zinc-100 dark:divide-white/5">
+                {inventory.map((item) => (
+                  <tr key={item.id} className="hover:bg-indigo-500/5 group">
+                    <td className="px-8 py-5">
+                       <div className="text-[10px] font-mono text-slate-400">{new Date(item.timestamp).toLocaleDateString()}</div>
+                       <div className="text-[10px] font-mono text-slate-500">{new Date(item.timestamp).toLocaleTimeString()}</div>
+                    </td>
+                    <td className="px-8 py-5"><span className="text-sm font-bold">{item.name}</span></td>
+                    <td className="px-8 py-5">
+                       <div className={`flex items-center gap-2 text-[10px] font-black uppercase tracking-widest ${item.type === 'INWARD' ? 'text-emerald-500' : 'text-orange-500'}`}>
+                          {item.type === 'INWARD' ? <ArrowDownLeft size={14}/> : <ArrowUpRight size={14}/>}
+                          {item.type}
+                       </div>
+                    </td>
+                    <td className="px-8 py-5">
+                       <span className="font-mono text-lg font-black">{item.qty}</span>
+                       <span className="ml-2 text-[10px] font-black text-slate-400 uppercase">{item.unit}</span>
+                    </td>
+                    <td className="px-8 py-5 text-right"><CheckCircle2 size={16} className="text-emerald-500 inline-block opacity-40"/></td>
+                  </tr>
+                ))}
+              </tbody>
+           </table>
+           {inventory.length === 0 && (
+             <div className="p-20 text-center text-[10px] font-black text-slate-400 uppercase tracking-widest italic opacity-40">Awaiting Material Logs...</div>
+           )}
+        </div>
+      </div>
+
+      <div className="space-y-6">
+        <div className="flex justify-between items-center">
+          <div>
+            <h2 className="text-3xl font-black uppercase italic tracking-tighter">Machinery Assets</h2>
+            <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-1">Operating Status & Fuel Monitoring</p>
+          </div>
+          <div className="flex gap-3">
+             <button onClick={exportMachinery} className="px-6 py-3 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-xl text-[10px] font-black uppercase border border-zinc-200 dark:border-white/5">
+                <FileOutput size={16}/> Status Export
+             </button>
+             {role === 'MAKER' && (
+               <button onClick={() => setShowAddMachine(!showAddMachine)} className="px-6 py-3 bg-indigo-600 text-white rounded-xl text-[10px] font-black uppercase shadow-xl flex items-center gap-2">
+                 {showAddMachine ? <X size={16}/> : <Plus size={16}/>} Deploy Asset
+               </button>
+             )}
+          </div>
+        </div>
+
+        {showAddMachine && (
+          <div className="bg-white dark:bg-slate-900 p-8 rounded-[2.5rem] border-2 border-indigo-500/30 shadow-xl grid grid-cols-1 md:grid-cols-5 gap-4 items-end animate-in slide-in-from-top-4">
+             <div className="space-y-2">
+                <label className="text-[9px] font-black uppercase text-slate-500 px-1">Machine Name</label>
+                <input value={macName} onChange={e => setMacName(e.target.value)} placeholder="e.g. Excavator EX200" className="w-full bg-zinc-100 dark:bg-slate-800 rounded-xl p-3 text-xs outline-none focus:ring-1 focus:ring-indigo-500"/>
+             </div>
+             <div className="space-y-2">
+                <label className="text-[9px] font-black uppercase text-slate-500 px-1">Usage Stage</label>
+                <input value={macStage} onChange={e => setMacStage(e.target.value)} placeholder="e.g. Excavation Phase 1" className="w-full bg-zinc-100 dark:bg-slate-800 rounded-xl p-3 text-xs outline-none focus:ring-1 focus:ring-indigo-500"/>
+             </div>
+             <div className="space-y-2">
+                <label className="text-[9px] font-black uppercase text-slate-500 px-1">Fuel Cons.</label>
+                <input value={macFuel} onChange={e => setMacFuel(e.target.value)} placeholder="12L/hr" className="w-full bg-zinc-100 dark:bg-slate-800 rounded-xl p-3 text-xs outline-none focus:ring-1 focus:ring-indigo-500"/>
+             </div>
+             <div className="space-y-2">
+                <label className="text-[9px] font-black uppercase text-slate-500 px-1">Initial Condition</label>
+                <select value={macCond} onChange={e => setMacCond(e.target.value as any)} className="w-full bg-zinc-100 dark:bg-slate-800 rounded-xl p-3 text-xs outline-none">
+                   <option value="ACTIVE">Active</option>
+                   <option value="IDLE">Idle</option>
+                   <option value="NON-USE">Non-Use</option>
+                </select>
+             </div>
+             <button onClick={addMachine} className="bg-indigo-600 text-white h-11 rounded-xl text-[10px] font-black uppercase italic">Deploy to Site</button>
+          </div>
+        )}
+        
+        <div className="bg-white dark:bg-slate-900 rounded-[3rem] border border-zinc-200 dark:border-white/5 overflow-hidden shadow-xl">
+           <table className="w-full text-left">
+              <thead className="bg-zinc-50 dark:bg-slate-950 text-[10px] font-black text-slate-500 uppercase tracking-widest border-b border-zinc-200 dark:border-white/10">
+                <tr>
+                  <th className="px-8 py-6">Asset Name</th>
+                  <th className="px-8 py-6">Operating Stage</th>
+                  <th className="px-8 py-6">Condition</th>
+                  <th className="px-8 py-6">Fuel Cons.</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-zinc-100 dark:divide-white/5">
+                {machineries.map((m: Machine) => (
+                  <tr key={m.id} className="hover:bg-indigo-500/5 group">
+                    <td className="px-8 py-6">
+                       <span className="font-bold text-sm text-slate-900 dark:text-white uppercase italic">{m.name}</span>
+                    </td>
+                    <td className="px-8 py-6">
+                       <div className="flex items-center gap-2 text-[11px] font-bold text-slate-500 italic">
+                         <Construction size={14}/> {m.stage}
+                       </div>
+                    </td>
+                    <td className="px-8 py-6">
+                      <select 
+                        disabled={role !== 'MAKER'}
+                        value={m.condition} 
+                        onChange={(e) => setMachineries(machineries.map(it => it.id === m.id ? { ...it, condition: e.target.value as any } : it))}
+                        className={`rounded-lg px-3 py-1.5 text-[10px] font-black uppercase tracking-widest appearance-none outline-none border transition-colors ${
+                          m.condition === 'ACTIVE' ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-600' :
+                          m.condition === 'IDLE' ? 'bg-amber-500/10 border-amber-500/30 text-amber-600' :
+                          'bg-slate-100 dark:bg-slate-800 border-zinc-200 dark:border-white/10 text-slate-500'
+                        }`}
+                      >
+                        <option value="ACTIVE">Active</option>
+                        <option value="IDLE">Idle</option>
+                        <option value="NON-USE">Non-Use</option>
+                      </select>
+                    </td>
+                    <td className="px-8 py-6">
+                      <div className="flex items-center gap-2 font-mono font-black text-xs text-orange-500">
+                        <Fuel size={14}/> {m.fuelCons}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+           </table>
+           {machineries.length === 0 && (
+             <div className="p-20 text-center text-[10px] font-black text-slate-400 uppercase tracking-widest italic opacity-40">No Assets Deployed.</div>
+           )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const TimelineTab = ({ tasks, setTasks, role }: any) => {
+  const [showAddTask, setShowAddTask] = useState(false);
+  const [newTaskName, setNewTaskName] = useState('');
+
+  const addTask = () => {
+    if (!newTaskName) return;
+    const newTask: Task = {
+      id: `TASK-${Date.now()}`,
+      name: newTaskName,
+      start: 10,
+      end: 40,
+      progress: 0,
+      status: 'REMAINING'
+    };
+    setTasks([...tasks, newTask]);
+    setNewTaskName('');
+    setShowAddTask(false);
+  };
+
+  const updateTask = (id: string, updates: Partial<Task>) => {
+    setTasks(tasks.map((t: any) => t.id === id ? { ...t, ...updates } : t));
+  };
+
+  return (
+    <div className="space-y-8">
+      <div className="flex justify-between items-center">
+        <div>
+          <h2 className="text-3xl font-black uppercase italic tracking-tighter">WBS Timeline</h2>
+          <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-1">Interactive Gantt Scheduling</p>
+        </div>
+        {role === 'MAKER' && (
+          <button onClick={() => setShowAddTask(!showAddTask)} className="px-6 py-3 bg-cyan-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-xl flex items-center gap-2 italic">
+            {showAddTask ? <X size={16}/> : <Plus size={16}/>} Add Work Package
+          </button>
+        )}
+      </div>
+
+      {showAddTask && (
+        <div className="bg-white dark:bg-slate-900 p-8 rounded-[2.5rem] border border-cyan-500/30 flex gap-4 animate-in slide-in-from-top-4">
+           <input value={newTaskName} onChange={e => setNewTaskName(e.target.value)} placeholder="Package Name..." className="flex-1 bg-zinc-100 dark:bg-slate-800 rounded-xl px-4 text-sm font-bold outline-none"/>
+           <button onClick={addTask} className="px-8 py-3 bg-cyan-600 text-white rounded-xl text-[10px] font-black uppercase">Schedule</button>
+        </div>
+      )}
+      
+      <div className="bg-white dark:bg-slate-900 p-10 rounded-[4rem] border border-zinc-200 dark:border-white/5 shadow-2xl overflow-x-auto custom-scrollbar">
+         <div className="min-w-[1200px] space-y-4">
+            <div className="grid grid-cols-[350px_1fr] border-b border-zinc-100 dark:border-white/10 pb-6 mb-6">
+               <div className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] px-4">Activity Description</div>
+               <div className="flex justify-between text-[10px] font-black text-slate-400 uppercase tracking-widest px-4">
+                  {['PHASE 1', 'PHASE 2', 'PHASE 3', 'PHASE 4', 'PHASE 5', 'PHASE 6'].map(m => <span key={m}>{m}</span>)}
+               </div>
+            </div>
+            
+            {tasks.map((task: Task) => (
+              <div key={task.id} className="grid grid-cols-[350px_1fr] gap-8 group items-center">
+                <div className="flex items-center gap-4 px-4">
+                  {role === 'MAKER' ? (
+                    <input 
+                      value={task.name} 
+                      onChange={(e) => updateTask(task.id, { name: e.target.value })}
+                      className="bg-transparent border-b border-zinc-100 dark:border-white/10 font-bold text-[13px] uppercase italic outline-none focus:border-cyan-500 w-full"
+                    />
+                  ) : <span className="font-bold text-[13px] uppercase italic">{task.name}</span>}
+                  
+                  <select 
+                    disabled={role !== 'MAKER'}
+                    value={task.status} 
+                    onChange={(e) => updateTask(task.id, { status: e.target.value as any, progress: e.target.value === 'COMPLETED' ? 100 : task.progress })}
+                    className="text-[8px] font-black uppercase px-2 py-1 rounded bg-zinc-100 dark:bg-slate-800"
+                  >
+                    <option value="REMAINING">Remaining</option>
+                    <option value="IN_PROGRESS">In Progress</option>
+                    <option value="COMPLETED">Completed</option>
+                  </select>
+                </div>
+                
+                <div className="relative h-10 bg-zinc-50 dark:bg-slate-950/50 rounded-2xl overflow-hidden border border-zinc-100 dark:border-white/5">
+                   <div 
+                     className={`absolute inset-y-0 rounded-xl shadow-lg flex items-center justify-end px-4 transition-all duration-700 ${
+                       task.status === 'COMPLETED' ? 'bg-emerald-500' :
+                       task.status === 'IN_PROGRESS' ? 'bg-cyan-500' :
+                       'bg-slate-300 dark:bg-slate-800'
+                     }`}
+                     style={{ left: `${task.start}%`, right: `${100 - task.end}%` }}
+                   >
+                      {role === 'MAKER' && (
+                        <div className="absolute inset-0 flex items-center justify-between opacity-0 group-hover:opacity-100 transition-opacity px-2">
+                           <input type="range" min="0" max="100" value={task.start} onChange={(e) => updateTask(task.id, { start: parseInt(e.target.value) })} className="w-8 h-8 opacity-0 cursor-ew-resize"/>
+                           <input type="range" min="0" max="100" value={task.end} onChange={(e) => updateTask(task.id, { end: parseInt(e.target.value) })} className="w-8 h-8 opacity-0 cursor-ew-resize"/>
+                        </div>
+                      )}
+                      <span className="text-[10px] font-black text-white relative z-10">{task.status === 'COMPLETED' ? '100%' : `${task.progress}%`}</span>
+                      <div className="absolute inset-0 bg-black/20" style={{ width: `${100 - task.progress}%`, left: `${task.progress}%` }}></div>
+                   </div>
+                </div>
+              </div>
+            ))}
+            
+            {tasks.length === 0 && (
+              <div className="p-20 text-center opacity-30 italic font-bold">No packages scheduled.</div>
+            )}
+         </div>
+      </div>
+    </div>
+  );
+};
+
+const BoqTab = ({ items, setItems, role }: any) => (
+  <div className="space-y-8 flex flex-col items-center justify-center p-20 opacity-30">
+    <Calculator size={64}/>
+    <h3 className="text-xl font-black uppercase italic mt-4">BOQ Repository Empty</h3>
+  </div>
+);
+
+const GalleryTab = ({ media, setMedia, role }: any) => {
+  const [stream, setStream] = useState<MediaStream | null>(null);
+  const [isCapturing, setIsCapturing] = useState(false);
+  const videoRef = useRef<HTMLVideoElement>(null);
+
+  const captureFrame = () => {
+    if (videoRef.current) {
+      const canvas = document.createElement('canvas');
+      canvas.width = videoRef.current.videoWidth;
+      canvas.height = videoRef.current.videoHeight;
+      canvas.getContext('2d')?.drawImage(videoRef.current, 0, 0);
+      const url = canvas.toDataURL('image/jpeg');
+      
+      const newMedia: SiteMedia = {
+        id: `CAP-${Date.now()}`,
+        url,
+        date: new Date().toISOString(),
+        status: 'PENDING',
+        user: 'Current Maker',
+        remarks: [{ text: 'Initial capture.', timestamp: new Date().toISOString(), author: 'Maker', qty: 0, unit: 'N/A' }]
+      };
+      
+      setMedia([newMedia, ...media]);
+      stopCamera();
+    }
+  };
+
+  const startCamera = async () => {
+    try {
+      const mediaStream = await navigator.mediaDevices.getUserMedia({ video: true });
+      setStream(mediaStream);
+      if (videoRef.current) videoRef.current.srcObject = mediaStream;
+      setIsCapturing(true);
+    } catch (err) { alert("Camera denied."); }
+  };
+
+  const stopCamera = () => {
+    stream?.getTracks().forEach(track => track.stop());
+    setStream(null);
+    setIsCapturing(false);
+  };
+
+  const updateMediaStatus = (id: string, status: 'APPROVED' | 'REJECTED') => {
+    setMedia(media.map((m: any) => m.id === id ? { ...m, status } : m));
+  };
+
+  const addRemark = (id: string, text: string, qty?: number, unit?: string) => {
+    setMedia(media.map((m: any) => {
+      if (m.id === id) {
+        return { 
+          ...m, 
+          remarks: [{ text, timestamp: new Date().toISOString(), author: role, qty, unit }, ...m.remarks] 
+        };
+      }
+      return m;
+    }));
+  };
+
+  const sortedDates = Object.keys(
+    media.reduce((acc: any, item: any) => {
+      const date = new Date(item.date).toDateString();
+      acc[date] = true;
+      return acc;
+    }, {})
+  ).sort((a, b) => new Date(b).getTime() - new Date(a).getTime());
+
+  return (
+    <div className="space-y-8">
+      <div className="flex justify-between items-center">
+        <h2 className="text-3xl font-black uppercase italic tracking-tighter">Site Gallery</h2>
+        {role === 'MAKER' && !isCapturing && (
+          <button onClick={startCamera} className="px-8 py-4 bg-cyan-600 text-white rounded-2xl font-black uppercase tracking-widest shadow-2xl flex items-center gap-3 italic">
+            <Camera size={20} /> Field Capture
+          </button>
+        )}
+      </div>
+
+      {isCapturing && (
+        <div className="bg-slate-900 p-10 rounded-[4rem] border-4 border-cyan-500 shadow-2xl space-y-8 animate-in zoom-in-95">
+           <video ref={videoRef} autoPlay muted playsInline className="w-full aspect-video rounded-3xl object-cover bg-black" />
+           <div className="flex justify-center gap-8">
+              <button onClick={stopCamera} className="p-5 bg-slate-800 text-slate-400 rounded-full hover:text-white transition-all"><X size={28}/></button>
+              <button onClick={captureFrame} className="p-8 bg-cyan-600 text-white rounded-full shadow-2xl hover:scale-110 active:scale-90 transition-all border-4 border-white/20"><Camera size={40}/></button>
+           </div>
+        </div>
+      )}
+
+      <div className="space-y-16">
+        {sortedDates.map(date => (
+          <section key={date} className="space-y-8">
+            <h3 className="text-xs font-black text-slate-500 uppercase tracking-[0.4em] flex items-center gap-6">
+              <div className="h-px bg-zinc-200 dark:bg-slate-800 flex-1"></div>
+              {date}
+              <div className="h-px bg-zinc-200 dark:bg-slate-800 flex-1"></div>
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
+               {media.filter(m => new Date(m.date).toDateString() === date).map((item: any) => (
+                 <MediaCard key={item.id} item={item} role={role} onAddRemark={addRemark} onStatusUpdate={updateMediaStatus} />
+               ))}
+            </div>
+          </section>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+const ReportsTab = ({ activeProject, media, machineries, reports, setReports }: any) => {
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [selectedReport, setSelectedReport] = useState<DailyReport | null>(null);
+
+  const generateReport = async () => {
+    setIsGenerating(true);
+    const today = new Date().toLocaleDateString();
+    const approvedToday = media.filter((m: any) => m.status === 'APPROVED' && new Date(m.date).toLocaleDateString() === today);
+    
+    const content = await generateDailyReport({
+      project: activeProject,
+      date: today,
+      approvedMedia: approvedToday,
+      activeMachinery: machineries
+    });
+
+    const newReport: DailyReport = {
+      id: `REP-${Date.now()}`,
+      date: today,
+      content,
+      status: 'FINALIZED'
+    };
+
+    setReports([newReport, ...reports]);
+    setSelectedReport(newReport);
+    setIsGenerating(false);
+  };
+
+  return (
+    <div className="space-y-8 h-full">
+      <div className="flex justify-between items-center">
+        <div>
+           <h2 className="text-3xl font-black uppercase italic tracking-tighter">Neural Daily Reports</h2>
+           <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-1">Verified Audit-Ready Documents</p>
+        </div>
+        <button 
+          onClick={generateReport}
+          disabled={isGenerating}
+          className="px-10 py-4 bg-cyan-600 text-white rounded-[2rem] font-black uppercase tracking-widest shadow-2xl flex items-center gap-3 transition-all hover:scale-105 active:scale-95 disabled:opacity-50"
+        >
+          {isGenerating ? <Loader2 className="animate-spin" size={20}/> : <Zap size={20} className="fill-white"/>}
+          Generate Today's WIP
+        </button>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-8 h-full min-h-[600px]">
+        <div className="lg:col-span-1 space-y-4">
+           {reports.map((r: any) => (
+             <button 
+               key={r.id} 
+               onClick={() => setSelectedReport(r)}
+               className={`w-full p-6 rounded-3xl border text-left transition-all ${selectedReport?.id === r.id ? 'bg-white dark:bg-slate-900 border-cyan-500 shadow-xl' : 'bg-zinc-100 dark:bg-slate-950 border-transparent opacity-60'}`}
+             >
+                <p className="text-[9px] font-black text-slate-400 uppercase">{r.id}</p>
+                <h4 className="text-sm font-bold mt-1 uppercase italic">{r.date}</h4>
+                <div className="flex items-center gap-2 mt-2">
+                   <CheckCircle2 size={12} className="text-emerald-500" />
+                   <span className="text-[9px] font-black text-slate-500 uppercase">{r.status}</span>
+                </div>
+             </button>
+           ))}
+           {reports.length === 0 && (
+             <div className="text-center p-12 bg-zinc-100 dark:bg-slate-900 rounded-3xl opacity-20 border-2 border-dashed border-slate-500">
+                <FileText size={48} className="mx-auto" />
+                <p className="text-[10px] font-black mt-4 uppercase">No Reports Available</p>
+             </div>
+           )}
+        </div>
+
+        <div className="lg:col-span-3 bg-white dark:bg-slate-900 border border-zinc-200 dark:border-white/5 rounded-[4rem] shadow-2xl p-12 overflow-y-auto max-h-[80vh] custom-scrollbar relative">
+           {selectedReport ? (
+             <div className="animate-in fade-in duration-500">
+                <div className="flex justify-between items-start mb-12 border-b border-zinc-100 dark:border-white/10 pb-8">
+                   <div className="flex items-center gap-4">
+                      <div className="p-4 bg-slate-900 dark:bg-white rounded-2xl"><FileType className="text-white dark:text-slate-900" size={32}/></div>
+                      <div>
+                        <h3 className="text-2xl font-black uppercase italic tracking-tighter">WIP Report #{selectedReport.id}</h3>
+                        <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1">Generated by Construction AI Engine</p>
+                      </div>
+                   </div>
+                   <button onClick={() => window.print()} className="p-4 bg-zinc-50 dark:bg-slate-800 rounded-2xl text-slate-400 hover:text-cyan-500 transition-colors">
+                      <Printer size={20} />
+                   </button>
+                </div>
+                <div className="prose prose-slate dark:prose-invert max-w-none prose-sm">
+                   <div className="whitespace-pre-wrap font-mono text-[11px] leading-relaxed text-slate-700 dark:text-slate-300">
+                      {selectedReport.content}
+                   </div>
+                </div>
+             </div>
+           ) : (
+             <div className="h-full flex flex-col items-center justify-center opacity-10">
+                <History size={120} />
+                <h3 className="text-4xl font-black uppercase italic mt-8">Select Report to View</h3>
+             </div>
+           )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+/* Atomic Components */
+
+const MediaCard = ({ item, role, onAddRemark, onStatusUpdate }: any) => {
+  const [newRemark, setNewRemark] = useState('');
+  const [newQty, setNewQty] = useState<number>(0);
+  const [newUnit, setNewUnit] = useState('Cum');
+  const [showHistory, setShowHistory] = useState(false);
+
+  return (
+    <div className="bg-white dark:bg-slate-900 rounded-[3.5rem] overflow-hidden border border-zinc-200 dark:border-white/5 shadow-2xl group flex flex-col md:flex-row h-full">
+       <div className="md:w-1/2 aspect-square relative overflow-hidden bg-black">
+          <img src={item.url} className="w-full h-full object-cover" alt="Site" />
+          <div className="absolute top-6 left-6 px-3 py-1 bg-black/60 backdrop-blur rounded-full text-[9px] font-black text-white uppercase tracking-widest border border-white/10">
+            {new Date(item.date).toLocaleTimeString()}
+          </div>
+       </div>
+       <div className="md:w-1/2 p-8 flex flex-col">
+          <div className="flex justify-between items-start mb-6">
+            <div>
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Logged By</p>
+              <p className="text-xs font-black uppercase italic text-cyan-600">{item.user}</p>
+            </div>
+            <div className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest ${
+              item.status === 'APPROVED' ? 'bg-emerald-500/10 text-emerald-500' : 
+              item.status === 'REJECTED' ? 'bg-red-500/10 text-red-500' :
+              'bg-amber-500/10 text-amber-500'
+            }`}>
+              {item.status}
+            </div>
+          </div>
+
+          <div className="flex-1 space-y-4 overflow-y-auto max-h-[150px] scrollbar-hide">
+            {item.remarks[0] && (
+              <div className="p-4 bg-zinc-50 dark:bg-slate-950/50 rounded-2xl border border-zinc-100 dark:border-white/5">
+                <p className="text-[11px] font-bold text-slate-700 dark:text-slate-300 italic">"{item.remarks[0].text}"</p>
+                {item.remarks[0].qty > 0 && (
+                   <div className="mt-2 flex items-center gap-2">
+                      <span className="text-[10px] font-black text-emerald-500 uppercase">Quantity:</span>
+                      <span className="text-[10px] font-mono font-bold">{item.remarks[0].qty} {item.remarks[0].unit}</span>
+                   </div>
+                )}
+                <p className="text-[8px] font-black text-slate-400 uppercase mt-2">{new Date(item.remarks[0].timestamp).toLocaleString()} • {item.remarks[0].author}</p>
+              </div>
+            )}
+            {showHistory && item.remarks.slice(1).map((r: any, idx: number) => (
+              <div key={idx} className="p-4 bg-zinc-100 dark:bg-slate-800/50 rounded-2xl opacity-60">
+                <p className="text-[10px] font-medium italic text-slate-500">"{r.text}"</p>
+                {r.qty > 0 && <p className="text-[9px] font-mono mt-1">{r.qty} {r.unit}</p>}
+              </div>
+            ))}
+          </div>
+
+          <button onClick={() => setShowHistory(!showHistory)} className="text-[9px] font-black text-slate-400 uppercase tracking-widest mt-4 hover:text-cyan-500 transition-colors flex items-center gap-1">
+             <History size={10}/> {showHistory ? 'Hide History' : `Show History (${item.remarks.length - 1})`}
+          </button>
+
+          {role === 'MAKER' && (
+            <div className="mt-6 space-y-3">
+              <div className="flex gap-2">
+                 <input 
+                  type="number" 
+                  placeholder="Qty" 
+                  value={newQty || ''} 
+                  onChange={(e) => setNewQty(parseFloat(e.target.value))}
+                  className="w-20 bg-zinc-50 dark:bg-slate-950 border border-zinc-200 dark:border-white/10 rounded-xl px-3 text-xs outline-none font-mono"
+                 />
+                 <input 
+                  placeholder="Unit (Cum, Kg, etc)" 
+                  value={newUnit} 
+                  onChange={(e) => setNewUnit(e.target.value)}
+                  className="w-24 bg-zinc-50 dark:bg-slate-950 border border-zinc-200 dark:border-white/10 rounded-xl px-3 text-xs outline-none"
+                 />
+              </div>
+              <div className="flex gap-2">
+                <input 
+                  placeholder="Work description remark..." 
+                  value={newRemark}
+                  onChange={(e) => setNewRemark(e.target.value)}
+                  className="flex-1 bg-zinc-50 dark:bg-slate-950 border border-zinc-200 dark:border-white/10 rounded-xl px-4 text-xs italic outline-none"
+                />
+                <button 
+                  onClick={() => { if(newRemark.trim()){ onAddRemark(item.id, newRemark, newQty, newUnit); setNewRemark(''); setNewQty(0); }}}
+                  className="p-3 bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-xl shadow-lg active:scale-90 transition-all"
+                >
+                  <Zap size={16}/>
+                </button>
+              </div>
+            </div>
+          )}
+
+          {role === 'CHECKER' && item.status === 'PENDING' && (
+            <div className="mt-6 flex gap-2">
+              <button onClick={() => onStatusUpdate(item.id, 'APPROVED')} className="flex-1 py-3 bg-emerald-500 text-white rounded-xl text-[9px] font-black uppercase tracking-widest shadow-xl active:scale-95 transition-all">Approve Evidence</button>
+              <button onClick={() => onStatusUpdate(item.id, 'REJECTED')} className="flex-1 py-3 bg-red-500 text-white rounded-xl text-[9px] font-black uppercase tracking-widest shadow-xl active:scale-95 transition-all">Reject</button>
+            </div>
+          )}
+       </div>
+    </div>
+  );
+};
+
+const NavBtn = ({ active, onClick, icon, label, count }: any) => (
+  <button onClick={onClick} className={`w-full flex items-center justify-between p-4 rounded-2xl transition-all ${active ? 'bg-cyan-600 text-white shadow-xl shadow-cyan-600/20' : 'text-slate-500 hover:bg-zinc-100 dark:hover:bg-slate-800'}`}>
+    <div className="flex items-center gap-4">
+      {icon}
+      <span className="text-[11px] font-black uppercase tracking-tight">{label}</span>
+    </div>
+    {count > 0 && <span className={`text-[9px] font-black px-2 py-0.5 rounded-full ${active ? 'bg-white text-cyan-600' : 'bg-red-500 text-white'}`}>{count}</span>}
+  </button>
 );
 
 const StatCard = ({ label, value, sub, icon }: any) => (
-  <div className="bg-white dark:bg-slate-900 border border-zinc-200 dark:border-white/5 p-8 rounded-[3rem] shadow-sm flex flex-col justify-between hover:shadow-2xl transition-all cursor-default group">
-    <div className="flex justify-between items-start mb-6">
-      <div className="p-4 bg-zinc-50 dark:bg-white/5 rounded-2xl shadow-inner border border-zinc-100 dark:border-white/5 group-hover:scale-110 transition-transform">{icon}</div>
-    </div>
-    <div>
-      <div className="text-3xl font-black text-slate-900 dark:text-white tracking-tighter mb-1 italic leading-none">{value}</div>
-      <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">{label}</div>
-      <div className="text-[9px] text-slate-500 font-bold uppercase tracking-tight">{sub}</div>
-    </div>
+  <div className="bg-white dark:bg-slate-900 border border-zinc-200 dark:border-white/5 p-8 rounded-[3rem] shadow-sm group hover:border-cyan-500 transition-all">
+    <div className="p-4 bg-zinc-50 dark:bg-white/5 rounded-2xl w-fit mb-6 group-hover:scale-110 transition-transform">{icon}</div>
+    <div className="text-3xl font-black text-slate-900 dark:text-white tracking-tighter italic mb-1">{value}</div>
+    <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{label}</div>
+    <div className="text-[9px] text-slate-500 font-bold uppercase">{sub}</div>
   </div>
 );
 
-export default ProjectSuite;
+const FolderCard = ({ name, count, icon }: any) => (
+  <div className="p-8 bg-white dark:bg-slate-900 border border-zinc-200 dark:border-white/5 rounded-[3rem] shadow-sm hover:scale-105 transition-all cursor-pointer group">
+    <div className="flex justify-between items-start mb-6">
+      <div className="p-4 bg-zinc-50 dark:bg-white/5 rounded-2xl group-hover:bg-cyan-500 transition-colors group-hover:text-white">{icon}</div>
+      <MoreVertical size={16} className="text-slate-300" />
+    </div>
+    <h4 className="text-lg font-black uppercase italic text-slate-900 dark:text-white">{name}</h4>
+    <p className="text-[10px] text-slate-500 font-bold uppercase mt-1">{count} Linked Documents</p>
+  </div>
+);
+
+export default ProjectDashboard;
