@@ -1,23 +1,34 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { X, UploadCloud, Zap, Loader2, CheckCircle2, Box, Layers, ArrowRight, Download, FileText, Info, AlertCircle, ShieldCheck, Sparkles } from 'lucide-react';
+import { X, UploadCloud, Zap, Loader2, CheckCircle2, Box, Layers, ArrowRight, Download, FileText, Info, AlertCircle, ShieldCheck, Sparkles, Lock } from 'lucide-react';
 import ThreeDViewer from './ThreeDViewer';
 import { ProjectStage } from '../types';
 import { MOCK_CAMERAS } from '../constants';
 import { reconstructBimFromPlans } from '../services/geminiService';
+import ContactUsModal from './ContactUsModal';
 
 interface BimSynthesisViewProps {
   onClose: () => void;
+  isPremium?: boolean;
 }
 
-const BimSynthesisView: React.FC<BimSynthesisViewProps> = ({ onClose }) => {
+const BimSynthesisView: React.FC<BimSynthesisViewProps> = ({ onClose, isPremium }) => {
   const [step, setStep] = useState<'upload' | 'processing' | 'result'>('upload');
   const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
   const [progress, setProgress] = useState(0);
   const [statusMessage, setStatusMessage] = useState('Initializing Neural Engine...');
   const [synthesisData, setSynthesisData] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
+  const [showContact, setShowContact] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Security Check Logic
+  const getCurrentMonthKey = () => `BIM_USAGE_${new Date().getFullYear()}_${new Date().getMonth()}`;
+  const [usageCount, setUsageCount] = useState(() => {
+    return parseInt(localStorage.getItem(getCurrentMonthKey()) || '0');
+  });
+
+  const isLimitReached = !isPremium && usageCount >= 1;
 
   const statusPhases = [
     { threshold: 10, message: "Reading Plan Metadata..." },
@@ -29,12 +40,16 @@ const BimSynthesisView: React.FC<BimSynthesisViewProps> = ({ onClose }) => {
 
   useEffect(() => {
     if (step === 'processing') {
-      const currentPhase = statusPhases.reverse().find(p => progress >= p.threshold);
+      const currentPhase = [...statusPhases].reverse().find(p => progress >= p.threshold);
       if (currentPhase) setStatusMessage(currentPhase.message);
     }
   }, [progress, step]);
 
   const handleUploadClick = () => {
+    if (isLimitReached) {
+      setShowContact(true);
+      return;
+    }
     fileInputRef.current?.click();
   };
 
@@ -47,12 +62,11 @@ const BimSynthesisView: React.FC<BimSynthesisViewProps> = ({ onClose }) => {
   };
 
   const startSynthesis = async () => {
-    if (!hasMinimumPlans) return;
+    if (!hasMinimumPlans || isLimitReached) return;
     setStep('processing');
     setProgress(0);
     setError(null);
 
-    // Dynamic progress bar simulator
     const interval = setInterval(() => {
       setProgress(prev => {
         if (prev < 92) return prev + Math.random() * 2;
@@ -68,6 +82,11 @@ const BimSynthesisView: React.FC<BimSynthesisViewProps> = ({ onClose }) => {
       setProgress(100);
       setStatusMessage("Reconstruction Complete!");
       
+      // Persist usage count
+      const newCount = usageCount + 1;
+      setUsageCount(newCount);
+      localStorage.setItem(getCurrentMonthKey(), newCount.toString());
+
       setTimeout(() => {
         setStep('result');
       }, 800);
@@ -101,7 +120,7 @@ const BimSynthesisView: React.FC<BimSynthesisViewProps> = ({ onClose }) => {
             <Box size={24} />
           </div>
           <div>
-            <h1 className="text-xl font-black text-white uppercase italic tracking-tighter leading-none">2d plan to <span className="text-cyan-400">BIM model</span></h1>
+            <h1 className="text-xl font-black text-white uppercase italic tracking-tighter leading-none">2D Plan to <span className="text-cyan-400">BIM Model</span></h1>
             <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1">AI-Powered Neural 3D Reconstruction</p>
           </div>
         </div>
@@ -118,14 +137,27 @@ const BimSynthesisView: React.FC<BimSynthesisViewProps> = ({ onClose }) => {
                 <div className="space-y-4">
                   <h2 className="text-4xl font-black text-white uppercase italic tracking-tighter leading-tight">Synthesis <span className="text-cyan-500">Guide</span></h2>
                   <p className="text-slate-400 text-sm font-medium leading-relaxed italic">
-                    To generate a spatially verified Digital Twin, our Vision AI requires a minimum dataset to anchor the geometry.
+                    Generate spatially verified Digital Twins from site blueprints. 
                   </p>
+                  {!isPremium && (
+                    <div className="inline-flex items-center gap-2 px-3 py-1 bg-amber-500/10 border border-amber-500/20 rounded-lg text-amber-500 text-[10px] font-black uppercase">
+                       <Lock size={12}/> {1 - usageCount} Monthly Credits Remaining
+                    </div>
+                  )}
                 </div>
 
-                {error && (
-                  <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-2xl flex items-center gap-3 animate-pulse">
-                    <AlertCircle className="text-red-500 shrink-0" size={18} />
-                    <p className="text-[10px] text-red-400 font-black uppercase tracking-widest">{error}</p>
+                {isLimitReached && (
+                  <div className="p-6 bg-amber-500/10 border-2 border-amber-500/30 rounded-[2rem] space-y-4 animate-in slide-in-from-left-4">
+                    <div className="flex items-center gap-3 text-amber-500">
+                      <AlertCircle size={24} />
+                      <h3 className="font-black uppercase italic text-sm">Monthly Limit Reached</h3>
+                    </div>
+                    <p className="text-xs text-slate-400 font-medium leading-relaxed">
+                      Free accounts are limited to 1 BIM synthesis per month. Use coupon <span className="text-cyan-500 font-black">JADU2026</span> or contact us for enterprise access.
+                    </p>
+                    <button onClick={() => setShowContact(true)} className="w-full py-3 bg-amber-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-amber-500 transition-all">
+                      Request Extended Limit
+                    </button>
                   </div>
                 )}
 
@@ -135,24 +167,27 @@ const BimSynthesisView: React.FC<BimSynthesisViewProps> = ({ onClose }) => {
                     <div className="flex items-center gap-1 bg-cyan-500/10 px-2 py-0.5 rounded text-[8px] font-black text-cyan-400 uppercase tracking-widest">Minimum 2 Required</div>
                   </div>
                   
-                  <RequirementItem title="Architectural Plans" desc="Defines the core building envelope and vertical elevations." required active={hasArch} />
-                  <RequirementItem title="Structural Plans" desc="Required for Columns, Beams, and load-bearing skeleton." required active={hasStruct} />
-                  <RequirementItem title="MEP Schematics" desc="Recommended for service clash detection (HVAC, Plumbing)." active={uploadedFiles.some(f => f.name.toLowerCase().includes('mep') || f.name.toLowerCase().includes('elec'))} />
+                  <RequirementItem title="Architectural Plans" desc="Defines the core building envelope." required active={hasArch} />
+                  <RequirementItem title="Structural Plans" desc="Required for Columns and Beams." required active={hasStruct} />
+                  <RequirementItem title="MEP Schematics" desc="Recommended for service clash detection." active={uploadedFiles.some(f => f.name.toLowerCase().includes('mep') || f.name.toLowerCase().includes('elec'))} />
                 </div>
               </div>
 
               <div className="w-full lg:w-2/3 flex flex-col items-center">
-                <div className="w-full bg-slate-900/50 border-4 border-dashed border-slate-800 rounded-[3rem] p-12 flex flex-col items-center justify-center transition-all hover:border-cyan-500/50 group relative">
-                  <button onClick={handleUploadClick} className={`w-full flex flex-col items-center gap-6 ${uploadedFiles.length > 0 ? 'mb-8' : ''}`}>
-                    <div className="p-8 bg-slate-800 rounded-[2rem] text-slate-500 group-hover:text-cyan-400 group-hover:bg-cyan-500/10 transition-all shadow-inner">
-                      <UploadCloud size={48} />
+                <div className={`w-full bg-slate-900/50 border-4 border-dashed rounded-[3rem] p-12 flex flex-col items-center justify-center transition-all group relative ${isLimitReached ? 'border-slate-800 opacity-50 grayscale' : 'border-slate-800 hover:border-cyan-500/50'}`}>
+                  <button 
+                    onClick={handleUploadClick} 
+                    className={`w-full flex flex-col items-center gap-6 ${uploadedFiles.length > 0 ? 'mb-8' : ''}`}
+                  >
+                    <div className={`p-8 bg-slate-800 rounded-[2rem] text-slate-500 transition-all shadow-inner ${!isLimitReached && 'group-hover:text-cyan-400 group-hover:bg-cyan-500/10'}`}>
+                      {isLimitReached ? <Lock size={48} /> : <UploadCloud size={48} />}
                     </div>
                     <p className="text-sm font-black uppercase tracking-widest text-slate-400 group-hover:text-white transition-colors">
-                      {uploadedFiles.length === 0 ? 'Drop Project Blueprints Here' : 'Add More Plans'}
+                      {isLimitReached ? 'Service Locked' : uploadedFiles.length === 0 ? 'Drop Blueprints Here' : 'Add More Plans'}
                     </p>
                   </button>
 
-                  {uploadedFiles.length > 0 && (
+                  {uploadedFiles.length > 0 && !isLimitReached && (
                     <div className="w-full space-y-6">
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-[200px] overflow-y-auto pr-2 scrollbar-hide">
                         {uploadedFiles.map((f, i) => (
@@ -234,39 +269,13 @@ const BimSynthesisView: React.FC<BimSynthesisViewProps> = ({ onClose }) => {
                   onSaveTour={() => {}}
                   bimFileName="Synthesized_Digital_Twin_v1.0.ifc"
                 />
-                
-                <div className="absolute bottom-10 left-10 z-30 pointer-events-none">
-                  <div className="bg-slate-950/80 backdrop-blur-md p-6 rounded-[2rem] border border-white/10 shadow-2xl min-w-[280px]">
-                    <div className="flex items-center gap-4 mb-4">
-                      <div className="p-3 bg-cyan-600 rounded-xl text-white">
-                        <Layers size={20} />
-                      </div>
-                      <div>
-                        <p className="text-[10px] font-black text-slate-500 uppercase leading-none">Model Specs</p>
-                        <p className="text-sm font-black text-white uppercase italic mt-1">LOD {synthesisData?.estimatedLod || 350} Compliant</p>
-                      </div>
-                    </div>
-                    <div className="space-y-2">
-                      <div className="flex justify-between gap-12">
-                        <span className="text-[9px] font-bold text-slate-500 uppercase">Structural Elements</span>
-                        <span className="text-[9px] font-mono text-cyan-400">{synthesisData?.elements?.length || '0'} Objects</span>
-                      </div>
-                      <div className="flex justify-between gap-12">
-                        <span className="text-[9px] font-bold text-slate-500 uppercase">Model Levels</span>
-                        <span className="text-[9px] font-mono text-cyan-400">{synthesisData?.levels || '0'} Stories</span>
-                      </div>
-                      <div className="flex justify-between gap-12">
-                        <span className="text-[9px] font-bold text-slate-500 uppercase">Geo-Registration</span>
-                        <span className="text-[9px] font-mono text-emerald-400">SUCCESS</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
               </div>
             </div>
           )}
         </div>
       </main>
+
+      {showContact && <ContactUsModal onClose={() => setShowContact(false)} reason="Unlimited BIM Synthesis License" />}
     </div>
   );
 };

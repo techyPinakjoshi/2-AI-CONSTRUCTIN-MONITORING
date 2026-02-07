@@ -1,6 +1,6 @@
 
-import React, { useState, useEffect } from 'react';
-import { X, Mail, Lock, User, Shield, Loader2, AlertCircle, Info, CheckCircle2, ChevronDown, ChevronUp } from 'lucide-react';
+import React, { useState } from 'react';
+import { X, Mail, Lock, User, Shield, Loader2, AlertCircle, CheckCircle2, Globe, Zap } from 'lucide-react';
 import { supabase } from '../services/supabaseClient';
 
 interface AuthModalProps {
@@ -10,16 +10,41 @@ interface AuthModalProps {
 
 const AuthModal: React.FC<AuthModalProps> = ({ onClose, onLogin }) => {
   const [mode, setMode] = useState<'login' | 'signup'>('login');
-  const [formData, setFormData] = useState({ email: '', password: '', name: '' });
+  const [formData, setFormData] = useState({ email: '', password: '', name: '', coupon: '' });
   const [isConnecting, setIsConnecting] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [needsVerification, setNeedsVerification] = useState(false);
+
+  const handleGoogleLogin = async () => {
+    setIsConnecting(true);
+    // Store coupon in localStorage to pick up after OAuth redirect
+    if (formData.coupon.trim()) {
+      localStorage.setItem('CONSTRUCT_AI_COUPON', formData.coupon.trim().toUpperCase());
+    }
+    
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo: window.location.origin
+      }
+    });
+    
+    if (error) {
+      setErrorMsg(error.message);
+      setIsConnecting(false);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsConnecting(true);
     setErrorMsg(null);
     setNeedsVerification(false);
+    
+    // Store coupon
+    if (formData.coupon.trim()) {
+      localStorage.setItem('CONSTRUCT_AI_COUPON', formData.coupon.trim().toUpperCase());
+    }
     
     try {
       if (mode === 'signup') {
@@ -34,7 +59,6 @@ const AuthModal: React.FC<AuthModalProps> = ({ onClose, onLogin }) => {
         if (data.user) {
           if (!data.session) {
             setNeedsVerification(true);
-            setIsConnecting(false);
           } else {
             onLogin(data.user);
           }
@@ -70,7 +94,22 @@ const AuthModal: React.FC<AuthModalProps> = ({ onClose, onLogin }) => {
           </button>
         </div>
 
-        <div className="p-8 space-y-6 max-h-[75vh] overflow-y-auto scrollbar-hide">
+        <div className="p-8 space-y-6 max-h-[85vh] overflow-y-auto scrollbar-hide">
+          <button 
+            onClick={handleGoogleLogin}
+            disabled={isConnecting}
+            className="w-full flex items-center justify-center gap-3 bg-white dark:bg-slate-800 border border-zinc-200 dark:border-white/10 p-4 rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-zinc-50 dark:hover:bg-slate-700 transition-all shadow-sm active:scale-95 disabled:opacity-50"
+          >
+            <Globe size={18} className="text-blue-500" />
+            Sign in with Google
+          </button>
+
+          <div className="relative flex items-center">
+            <div className="flex-grow border-t border-zinc-100 dark:border-white/5"></div>
+            <span className="flex-shrink mx-4 text-[9px] font-black text-slate-400 uppercase tracking-widest">or email access</span>
+            <div className="flex-grow border-t border-zinc-100 dark:border-white/5"></div>
+          </div>
+
           {needsVerification && (
             <div className="p-5 bg-amber-500/10 border border-amber-500/30 rounded-2xl space-y-3 animate-in zoom-in-95">
               <div className="flex gap-3">
@@ -131,6 +170,19 @@ const AuthModal: React.FC<AuthModalProps> = ({ onClose, onLogin }) => {
                     placeholder="Terminal Password"
                     className="w-full bg-zinc-100 dark:bg-black/20 border border-zinc-200 dark:border-white/10 rounded-2xl py-4 pl-12 pr-4 text-sm text-slate-900 dark:text-white focus:ring-2 focus:ring-cyan-500/50 outline-none transition-all"
                   />
+                </div>
+
+                <div className="pt-4 border-t border-zinc-100 dark:border-white/5">
+                  <div className="relative">
+                    <Zap className="absolute left-4 top-1/2 -translate-y-1/2 text-amber-500" size={16}/>
+                    <input 
+                      value={formData.coupon}
+                      onChange={(e) => setFormData({...formData, coupon: e.target.value})}
+                      placeholder="PROMO CODE (e.g. JADU2026)"
+                      className="w-full bg-amber-500/5 border border-amber-500/20 rounded-2xl py-4 pl-12 pr-4 text-sm text-amber-600 dark:text-amber-400 font-black placeholder:text-amber-500/40 focus:ring-2 focus:ring-amber-500/50 outline-none transition-all uppercase"
+                    />
+                  </div>
+                  <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mt-2 ml-4">Unlock all services with valid coupon</p>
                 </div>
 
                 <button 

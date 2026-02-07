@@ -34,10 +34,11 @@ interface LandingChatProps {
   onOpenBoqExtractor: () => void;
   user: any;
   isCodeAppLinked?: boolean;
+  isPremium?: boolean;
   children?: React.ReactNode;
 }
 
-const LandingChat: React.FC<LandingChatProps> = ({ onAuthRequired, onEnterApp, onOpenBoqDashboard, onOpenBoqExtractor, user, isCodeAppLinked, children }) => {
+const LandingChat: React.FC<LandingChatProps> = ({ onAuthRequired, onEnterApp, onOpenBoqDashboard, onOpenBoqExtractor, user, isCodeAppLinked, isPremium, children }) => {
   const { isDark, toggleTheme } = useContext(ThemeContext);
   const [messages, setMessages] = useState<Message[]>([]);
   const [chatId, setChatId] = useState<string | undefined>(undefined);
@@ -71,7 +72,6 @@ const LandingChat: React.FC<LandingChatProps> = ({ onAuthRequired, onEnterApp, o
       const updatedMessages: Message[] = [...newMessages, assistantMsg];
       setMessages(updatedMessages);
 
-      // Persist to Supabase if logged in
       if (user) {
         const savedChat = await saveChatHistory(user.id, updatedMessages, chatId);
         if (savedChat?.id) setChatId(savedChat.id);
@@ -86,7 +86,6 @@ const LandingChat: React.FC<LandingChatProps> = ({ onAuthRequired, onEnterApp, o
   return (
     <div className="flex h-screen bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100 overflow-hidden font-sans relative">
       
-      {/* GLOBAL NAVBAR */}
       <nav className="absolute top-0 left-0 right-0 h-20 flex items-center justify-between px-8 z-[60] bg-white/10 dark:bg-slate-950/10 backdrop-blur-md border-b border-zinc-200 dark:border-white/5">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl overflow-hidden bg-slate-900 flex items-center justify-center p-1 border border-cyan-500/30">
@@ -105,10 +104,7 @@ const LandingChat: React.FC<LandingChatProps> = ({ onAuthRequired, onEnterApp, o
         </div>
       </nav>
 
-      {/* MAIN LAYOUT */}
       <main className="flex-1 flex flex-col md:flex-row h-full pt-20">
-        
-        {/* LEFT: HERO & FEATURES */}
         <div className={`flex-1 overflow-y-auto px-6 md:px-12 py-10 transition-all duration-700 ${showChatWindow ? 'md:max-w-xl lg:max-w-2xl' : 'max-w-full'}`}>
           <div className="max-w-4xl mx-auto space-y-12 animate-in fade-in slide-in-from-left-6 duration-1000">
             
@@ -116,12 +112,12 @@ const LandingChat: React.FC<LandingChatProps> = ({ onAuthRequired, onEnterApp, o
               <div className="flex items-center gap-3">
                 <div className="inline-flex items-center gap-2 px-4 py-2 bg-cyan-500/10 border border-cyan-500/20 rounded-full text-cyan-500">
                   <Sparkles size={14} />
-                  <span className="text-[10px] font-black uppercase tracking-[0.2em]">Next-Gen Site Intelligence</span>
+                  <span className="text-[10px] font-black uppercase tracking-[0.2em]">NEXT-GEN PHYSICAL OBSERVABILITY PLATFORM FOR CONSTRUCTION SITES</span>
                 </div>
-                {isCodeAppLinked && (
-                  <div className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-500/10 border border-emerald-500/20 rounded-full text-emerald-500 animate-in zoom-in duration-300">
+                {isPremium && (
+                  <div className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-500/10 border border-emerald-500/20 rounded-full text-emerald-500">
                     <CheckCircle2 size={14} />
-                    <span className="text-[10px] font-black uppercase tracking-[0.2em]">Regulatory Link: Active</span>
+                    <span className="text-[10px] font-black uppercase tracking-[0.2em]">Full License Active</span>
                   </div>
                 )}
               </div>
@@ -129,7 +125,7 @@ const LandingChat: React.FC<LandingChatProps> = ({ onAuthRequired, onEnterApp, o
                 AI Platform for <span className="text-cyan-500">BOQ, BIM</span> & Monitoring
               </h1>
               <p className="text-lg text-slate-500 dark:text-slate-400 max-w-xl font-medium leading-relaxed italic">
-                Generate BOQs from 2D drawings, convert plans into BIM models, and monitor real-time construction progress — all in one AI-powered platform.
+                Automated 2D-to-BIM reconstruction, IS-1200 BOQ extraction, and real-time observability for modern site engineering.
               </p>
               
               <div className="flex flex-wrap gap-4 pt-4">
@@ -143,7 +139,7 @@ const LandingChat: React.FC<LandingChatProps> = ({ onAuthRequired, onEnterApp, o
                   onClick={onOpenBoqDashboard}
                   className="px-8 py-5 bg-white dark:bg-slate-900 border border-zinc-200 dark:border-white/10 text-slate-900 dark:text-white rounded-[2rem] font-black uppercase tracking-widest hover:bg-zinc-50 dark:hover:bg-white/5 transition-all shadow-xl flex items-center gap-3"
                 >
-                  <LayoutDashboard size={20} /> Project Dashboard
+                  <LayoutDashboard size={20} /> Project Hub
                 </button>
               </div>
             </header>
@@ -160,12 +156,13 @@ const LandingChat: React.FC<LandingChatProps> = ({ onAuthRequired, onEnterApp, o
                   </div>
                   <h3 className="text-xl font-black text-slate-900 dark:text-white uppercase italic tracking-tight leading-tight">2D → BIM <span className="text-cyan-500">Conversion</span></h3>
                   <p className="text-xs text-slate-500 font-medium leading-relaxed mt-2 italic">
-                    Convert 2D drawings into accurate BIM models with AI assistance.
+                    Synthesize accurate 3D Digital Twins from site blueprints.
                   </p>
-                  <div className="mt-6 flex items-center gap-2">
+                  <div className="mt-6 flex items-center justify-between">
                     <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-cyan-500/10 border border-cyan-500/20 rounded-full text-[9px] font-black text-cyan-500 uppercase tracking-widest">
                       <Move3d size={10} /> View BIM Model
                     </div>
+                    {!isPremium && <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">1 / Month</span>}
                   </div>
                 </div>
               </div>
@@ -181,12 +178,13 @@ const LandingChat: React.FC<LandingChatProps> = ({ onAuthRequired, onEnterApp, o
                   </div>
                   <h3 className="text-xl font-black text-slate-900 dark:text-white uppercase italic tracking-tight leading-tight">AI BOQ from <span className="text-amber-500">2D Plans</span></h3>
                   <p className="text-xs text-slate-500 font-medium leading-relaxed mt-2 italic">
-                    Auto-generate Excel-ready BOQs with quantities & takeoffs in minutes.
+                    Auto-generate Excel-ready BOQs with quantities & takeoffs.
                   </p>
-                  <div className="mt-6 flex items-center gap-2">
+                  <div className="mt-6 flex items-center justify-between">
                     <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-amber-500/10 border border-amber-500/20 rounded-full text-[9px] font-black text-amber-500 uppercase tracking-widest">
                       <FileSpreadsheet size={10} /> Download Excel
                     </div>
+                    {!isPremium && <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">5 / Month</span>}
                   </div>
                 </div>
               </div>
@@ -194,7 +192,6 @@ const LandingChat: React.FC<LandingChatProps> = ({ onAuthRequired, onEnterApp, o
           </div>
         </div>
 
-        {/* RIGHT: REGULATORY CHAT ASSISTANT */}
         <div className={`relative flex flex-col bg-zinc-50 dark:bg-slate-900 transition-all duration-700 border-l border-zinc-200 dark:border-white/5 ${showChatWindow ? 'flex-1' : 'w-16 md:w-24'}`}>
            {!showChatWindow ? (
              <div className="flex flex-col items-center py-10 gap-8 h-full">
@@ -204,10 +201,6 @@ const LandingChat: React.FC<LandingChatProps> = ({ onAuthRequired, onEnterApp, o
                 >
                    <MessageSquare size={24} />
                 </button>
-                <div className="flex-1 flex flex-col items-center gap-10">
-                   <div className="[writing-mode:vertical-lr] rotate-180 text-[10px] font-black text-slate-400 uppercase tracking-[0.5em] whitespace-nowrap">IS-CODE ASSISTANT ACTIVE</div>
-                   <div className="w-1.5 h-1.5 rounded-full bg-cyan-500 animate-pulse"></div>
-                </div>
              </div>
            ) : (
              <div className="flex flex-col h-full animate-in slide-in-from-right-10 duration-500">
@@ -216,12 +209,7 @@ const LandingChat: React.FC<LandingChatProps> = ({ onAuthRequired, onEnterApp, o
                       <div className="p-2 bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-lg"><Bot size={18}/></div>
                       <div>
                         <h4 className="text-xs font-black text-slate-900 dark:text-white uppercase tracking-tight">IS-Code Expert</h4>
-                        <div className="flex items-center gap-1.5">
-                          <span className={`w-1.5 h-1.5 rounded-full animate-pulse ${isCodeAppLinked ? 'bg-emerald-500' : 'bg-amber-500'}`}></span>
-                          <span className="text-[9px] text-slate-400 font-black uppercase tracking-widest">
-                            {isCodeAppLinked ? 'IS-CODE APP SYNCED' : 'ADVISORY MODE'}
-                          </span>
-                        </div>
+                        <span className="text-[9px] text-slate-400 font-black uppercase tracking-widest">ADVISORY MODE</span>
                       </div>
                    </div>
                    <button onClick={() => setShowChatWindow(false)} className="p-2 text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors"><ChevronRight size={20}/></button>
@@ -231,11 +219,7 @@ const LandingChat: React.FC<LandingChatProps> = ({ onAuthRequired, onEnterApp, o
                     {messages.length === 0 && (
                       <div className="h-full flex flex-col items-center justify-center text-center px-4 space-y-6 opacity-40">
                          <MessageSquare size={48} className="text-slate-400" />
-                         <p className="text-sm font-medium italic">
-                           {isCodeAppLinked 
-                             ? "Neural link to IS-Code database active. I can now provide specific clauses and compliance audits for your project."
-                             : "Ask me about IS-456 standards, concrete curing, or safety compliance on GIFT City projects."}
-                         </p>
+                         <p className="text-sm font-medium italic">Ask me about IS-456 standards or GIFT City compliance.</p>
                       </div>
                     )}
                     {messages.map((m, i) => (
@@ -259,18 +243,6 @@ const LandingChat: React.FC<LandingChatProps> = ({ onAuthRequired, onEnterApp, o
                 </div>
 
                 <div className="p-6 border-t border-zinc-200 dark:border-white/5 bg-white dark:bg-slate-900">
-                    <div className="flex flex-wrap gap-2 mb-4">
-                       {CATEGORIES.map(cat => (
-                          <button 
-                            key={cat.id} 
-                            onClick={() => handleSend(undefined, cat.prompt)}
-                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-zinc-100 dark:bg-slate-800 border border-zinc-200 dark:border-white/5 hover:border-cyan-500 transition-all"
-                          >
-                            <span className="text-slate-400">{cat.icon}</span>
-                            <span className="text-[9px] font-black uppercase tracking-widest text-slate-600 dark:text-slate-300">{cat.name}</span>
-                          </button>
-                       ))}
-                    </div>
                     <form onSubmit={handleSend} className="relative">
                         <input 
                             value={input}
@@ -278,12 +250,8 @@ const LandingChat: React.FC<LandingChatProps> = ({ onAuthRequired, onEnterApp, o
                             placeholder="Type a regulatory query..."
                             className="w-full bg-zinc-100 dark:bg-slate-800 border border-zinc-200 dark:border-white/10 rounded-2xl pl-4 pr-12 py-3.5 text-[12px] text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-cyan-500/30 transition-all"
                         />
-                        <button 
-                            type="submit" 
-                            disabled={!input.trim() || isTyping}
-                            className="absolute right-2 top-1/2 -translate-y-1/2 w-9 h-9 bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-xl flex items-center justify-center transition-all hover:scale-105 active:scale-95 disabled:opacity-30 shadow-lg"
-                        >
-                            <Send size={14} className="fill-current"/>
+                        <button type="submit" className="absolute right-2 top-1/2 -translate-y-1/2 w-9 h-9 bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-xl flex items-center justify-center transition-all hover:scale-105 shadow-lg">
+                            <Send size={14} />
                         </button>
                     </form>
                 </div>
@@ -292,7 +260,7 @@ const LandingChat: React.FC<LandingChatProps> = ({ onAuthRequired, onEnterApp, o
         </div>
       </main>
 
-      {showBimSynthesis && <BimSynthesisView onClose={() => setShowBimSynthesis(false)} />}
+      {showBimSynthesis && <BimSynthesisView onClose={() => setShowBimSynthesis(false)} isPremium={isPremium} />}
       
       {children}
     </div>

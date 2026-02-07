@@ -176,7 +176,7 @@ const ProjectDashboard: React.FC<any> = ({ activeProject, onClose, onCreateNew }
             {activeTab === 'timeline' && <TimelineTab tasks={tasks} setTasks={setTasks} role={userRole} />}
             {activeTab === 'boq' && <BoqTab items={boqItems} setItems={setBoqItems} role={userRole} />}
             {activeTab === 'gallery' && <GalleryTab media={media} setMedia={setMedia} role={userRole} />}
-            {activeTab === 'reports' && <ReportsTab activeProject={activeProject} media={media} machineries={machineries} reports={reports} setReports={setReports} />}
+            {activeTab === 'reports' && <ReportsTab activeProject={activeProject} media={media} machineries={machineries} inventory={inventory} reports={reports} setReports={setReports} />}
           </div>
         </main>
       </div>
@@ -301,7 +301,7 @@ const InventoryTab = ({ inventory, setInventory, machineries, setMachineries, ro
         <div className="flex justify-between items-center">
           <div>
             <h2 className="text-3xl font-black uppercase italic tracking-tighter">Material Timeline</h2>
-            <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-1">Inward & Outward Movements</p>
+            <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-1">Inward & Outward Movements (Latest First)</p>
           </div>
           <div className="flex gap-3">
              <button onClick={exportInventory} className="px-6 py-3 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center gap-2 border border-zinc-200 dark:border-white/5">
@@ -700,7 +700,7 @@ const GalleryTab = ({ media, setMedia, role }: any) => {
   );
 };
 
-const ReportsTab = ({ activeProject, media, machineries, reports, setReports }: any) => {
+const ReportsTab = ({ activeProject, media, machineries, inventory, reports, setReports }: any) => {
   const [isGenerating, setIsGenerating] = useState(false);
   const [selectedReport, setSelectedReport] = useState<DailyReport | null>(null);
 
@@ -708,12 +708,14 @@ const ReportsTab = ({ activeProject, media, machineries, reports, setReports }: 
     setIsGenerating(true);
     const today = new Date().toLocaleDateString();
     const approvedToday = media.filter((m: any) => m.status === 'APPROVED' && new Date(m.date).toLocaleDateString() === today);
+    const inventoryToday = inventory.filter((i: any) => new Date(i.timestamp).toLocaleDateString() === today);
     
     const content = await generateDailyReport({
       project: activeProject,
       date: today,
       approvedMedia: approvedToday,
-      activeMachinery: machineries
+      activeMachinery: machineries,
+      inventoryLogs: inventoryToday
     });
 
     const newReport: DailyReport = {
@@ -732,8 +734,8 @@ const ReportsTab = ({ activeProject, media, machineries, reports, setReports }: 
     <div className="space-y-8 h-full">
       <div className="flex justify-between items-center">
         <div>
-           <h2 className="text-3xl font-black uppercase italic tracking-tighter">Neural Daily Reports</h2>
-           <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-1">Verified Audit-Ready Documents</p>
+           <h2 className="text-3xl font-black uppercase italic tracking-tighter">Daily AI WIP Reports</h2>
+           <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-1">Verified Audit-Ready Documents (Auto-Generated from Evidence)</p>
         </div>
         <button 
           onClick={generateReport}
@@ -741,7 +743,7 @@ const ReportsTab = ({ activeProject, media, machineries, reports, setReports }: 
           className="px-10 py-4 bg-cyan-600 text-white rounded-[2rem] font-black uppercase tracking-widest shadow-2xl flex items-center gap-3 transition-all hover:scale-105 active:scale-95 disabled:opacity-50"
         >
           {isGenerating ? <Loader2 className="animate-spin" size={20}/> : <Zap size={20} className="fill-white"/>}
-          Generate Today's WIP
+          Generate Today's WIP Report
         </button>
       </div>
 
@@ -863,10 +865,10 @@ const MediaCard = ({ item, role, onAddRemark, onStatusUpdate }: any) => {
               <div className="flex gap-2">
                  <input 
                   type="number" 
-                  placeholder="Qty" 
+                  placeholder="Executed Qty (Approx)" 
                   value={newQty || ''} 
                   onChange={(e) => setNewQty(parseFloat(e.target.value))}
-                  className="w-20 bg-zinc-50 dark:bg-slate-950 border border-zinc-200 dark:border-white/10 rounded-xl px-3 text-xs outline-none font-mono"
+                  className="flex-1 bg-zinc-50 dark:bg-slate-950 border border-zinc-200 dark:border-white/10 rounded-xl px-3 text-xs outline-none font-mono"
                  />
                  <input 
                   placeholder="Unit (Cum, Kg, etc)" 

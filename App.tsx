@@ -76,13 +76,25 @@ const App: React.FC = () => {
 
   const handleLoginSuccess = useCallback(async (user: any) => {
     if (!user) return;
-    setAuthState(prev => ({ ...prev, user, loading: false, isAdmin: user.email === 'admin@constructai.com' }));
+    
+    // Supporting promotion code JADU2026 for full service access
+    const savedCoupon = localStorage.getItem('CONSTRUCT_AI_COUPON');
+    const hasFullAccess = savedCoupon === 'JADU2026' || user.email === 'admin@constructai.com';
+
+    setAuthState(prev => ({ 
+      ...prev, 
+      user, 
+      loading: false, 
+      isAdmin: user.email === 'admin@constructai.com',
+      isSubscribed: hasFullAccess
+    }));
+    
     setShowAuth(false);
+    
     try {
       const projects = await fetchUserProjects(user.id);
       setUserProjects(projects);
       if (projects.length > 0) {
-          setAuthState(prev => ({ ...prev, isSubscribed: true }));
           if (!activeProject) setActiveProject(projects[projects.length - 1]);
       }
     } catch (e) { 
@@ -92,6 +104,7 @@ const App: React.FC = () => {
 
   const handleLogout = useCallback(async () => {
     try { await supabase.auth.signOut(); } catch (e) {}
+    localStorage.removeItem('CONSTRUCT_AI_COUPON');
     setAuthState({ user: null, loading: false, isAdmin: false, isSubscribed: false });
     setView('landing');
     setActiveProject(null);
@@ -126,8 +139,6 @@ const App: React.FC = () => {
 
   const handleCreateProject = async (projectData: any) => {
     setShowProjectCreation(false);
-    
-    // Default to the dashboard orchestrator for new projects
     setView('project-suite');
     
     const tempId = `PROJ-TEMP-${Date.now()}`;
@@ -150,7 +161,6 @@ const App: React.FC = () => {
         const result = await saveProjectData(authState.user.id, finalProjectData);
         if (result.success) {
           setStagedBoqData(null);
-          setAuthState(prev => ({ ...prev, isSubscribed: true }));
           const projects = await fetchUserProjects(authState.user.id);
           setUserProjects(projects);
           if (activeProject?.id === tempId && projects.length > 0) {
@@ -218,16 +228,17 @@ const App: React.FC = () => {
         <div className={`${isDark ? 'dark' : 'light'} h-screen w-full bg-white dark:bg-slate-950 overflow-hidden`}>
           {view === 'landing' && (
             <LandingChat 
-              onAuthRequired={() => {}} // Disabled auth portal
+              onAuthRequired={() => setShowAuth(true)}
               onEnterApp={startPremiumOnboarding} 
               onOpenBoqDashboard={() => setView('project-suite')} 
               onOpenBoqExtractor={() => setView('boq-extractor')} 
               user={authState.user} 
               isCodeAppLinked={isCodeAppLinked}
+              isPremium={authState.isSubscribed}
             />
           )}
 
-          {view === 'boq-extractor' && <BoqExtractor onClose={() => setView('landing')} onSyncToSuite={handleBoqSync} userProjects={userProjects} />}
+          {view === 'boq-extractor' && <BoqExtractor onClose={() => setView('landing')} onSyncToSuite={handleBoqSync} userProjects={userProjects} isPremium={authState.isSubscribed} />}
           {view === 'project-suite' && (
             <ProjectDashboard 
               activeProject={activeProject} 
@@ -327,7 +338,7 @@ const App: React.FC = () => {
           {/* Global Modals */}
           {showAuth && <AuthModal onClose={() => setShowAuth(false)} onLogin={handleLoginSuccess} />}
           {showBilling && <BillingModal onClose={() => setShowBilling(false)} onSuccess={handleUpgradeSuccess} />}
-          {showProjectCreation && <ProjectCreationModal onClose={() => setShowProjectCreation(false)} onCreate={handleCreateProject} isAuthenticated={true} onAuthRequired={() => {}} />}
+          {showProjectCreation && <ProjectCreationModal onClose={() => setShowProjectCreation(false)} onCreate={handleCreateProject} isAuthenticated={true} onAuthRequired={() => setShowAuth(true)} />}
         </div>
       </ConnectionContext.Provider>
     </ThemeContext.Provider>
